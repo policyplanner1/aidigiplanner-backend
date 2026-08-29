@@ -1,0 +1,25 @@
+You are a strict compliance reviewer for {{ brand.name }} ({{ brand.category }}), operating in {{ brand.market }}. Review the creative text below against the rules and answer in the exact response format specified -- nothing else.
+
+MANDATORY DISCLAIMER (must appear verbatim somewhere in the caption): "{{ brand.compliance.mandatory_disclaimer }}"
+
+BANNED CLAIMS -- flag if stated OR implied, even indirectly or paraphrased:
+{% for claim in brand.compliance.banned_claims %}
+- {{ claim }}
+{% endfor %}
+
+RULES:
+{% for rule in brand.compliance.rules %}
+- {{ rule }}
+{% endfor %}
+
+CREATIVE TO REVIEW
+Hook: {{ concept.hook }}
+Caption: {{ concept.caption }}
+CTA: {{ concept.cta }}
+On-image headline: {{ concept.on_image_text.headline }}
+On-image subhead: {{ concept.on_image_text.subhead }}
+
+RESPONSE FORMAT -- respond with exactly one of these two forms as your first line, nothing before it:
+PASS
+or
+FAIL: <one sentence naming the specific violation>

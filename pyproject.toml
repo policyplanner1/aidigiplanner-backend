@@ -1,0 +1,69 @@
+[project]
+name = "aidigiplanner-backend"
+version = "0.1.0"
+description = "Auth, tenancy, and RBAC foundation for the aiDigiPlanner social media automation SaaS"
+readme = "README.md"
+requires-python = ">=3.12"
+dependencies = [
+    "fastapi>=0.115",
+    "uvicorn[standard]>=0.32",
+    "sqlalchemy[asyncio]>=2.0.36",
+    "aiomysql>=0.2.0",
+    "alembic>=1.14",
+    "pydantic>=2.9",
+    "pydantic-settings>=2.6",
+    "email-validator>=2.2",
+    "argon2-cffi>=23.1",
+    "pyjwt>=2.9",
+    "structlog>=24.4",
+    "uuid6>=2024.7.10",
+    "arq>=0.26",
+    "google-genai>=2.17,<3",
+    "jinja2>=3.1.4",
+    "tenacity>=9.0",
+    "pillow>=10.4",
+    "ffmpeg-python>=0.2",
+    "python-multipart>=0.0.9",
+    "httpx>=0.27",
+]
+
+[build-system]
+requires = ["hatchling"]
+build-backend = "hatchling.build"
+
+[tool.hatch.build.targets.wheel]
+packages = ["app"]
+
+[dependency-groups]
+dev = [
+    "pytest>=8.3",
+    "pytest-asyncio>=0.24",
+    "ruff>=0.6",
+    "mypy>=1.11",
+]
+
+[tool.ruff]
+line-length = 100
+target-version = "py312"
+extend-exclude = ["alembic/versions"]
+
+[tool.ruff.lint]
+select = ["E", "F", "I", "UP", "B"]
+
+[tool.mypy]
+python_version = "3.12"
+plugins = ["pydantic.mypy"]
+strict = true
+ignore_missing_imports = true
+
+[tool.pytest.ini_options]
+testpaths = ["tests"]
+asyncio_mode = "auto"
+# One event loop for the whole test session, matching the session-scoped
+# test_engine fixture in conftest.py. Without this, pytest-asyncio's default
+# per-test event loop tears down mid-session while the engine's pooled
+# aiomysql connections are still bound to the original loop — harmless on
+# Linux/macOS, but Windows' ProactorEventLoop raises "Event loop is closed"
+# during connection teardown when that happens.
+asyncio_default_fixture_loop_scope = "session"
+asyncio_default_test_loop_scope = "session"

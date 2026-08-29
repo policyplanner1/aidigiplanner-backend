@@ -1,0 +1,1172 @@
+{
+  "info": {
+    "name": "aiDigiPlanner API",
+    "description": "Full backend API for aiDigiPlanner: registration/onboarding, company & brand setup, products & sub-products, social accounts, team invites, AI creative generation, and content review/approval/scheduling.\n\nHow to use:\n1. Import this collection into Postman.\n2. Open the collection's Variables tab and set `base_url` (defaults to http://127.0.0.1:8000) if your server runs elsewhere.\n3. Run **Auth > Register**. This auto-saves `company_id`.\n4. Check your backend console/logs for the emailed 6-digit verification code (ConsoleEmailService logs it when SMTP isn't configured), paste it into the `otp` variable, then run **Auth > Verify Email**.\n5. Note: a brand-new company is `pending_approval` until a Super Admin approves it (see the Admin folder) -- login is blocked until then, unless you're testing against a dev DB where you flip the company's status directly.\n6. Run **Auth > Login**. This auto-saves `access_token` / `refresh_token`, which every other request uses via the collection's Bearer auth.\n7. Work through the folders top to bottom -- most \"create\" requests auto-save the id they return (see each request's description) into the collection variable the next requests need.\n\nFor Admin-folder requests, log in as a Super Admin account instead (create one via `uv run python scripts/seed_super_admin.py` on the server) -- Super Admins have no company, so re-run Login with that account's credentials before using the Admin folder, then Login again with a normal admin account to continue elsewhere.",
+    "schema": "https://schema.getpostman.com/json/collection/v2.1.0/collection.json"
+  },
+  "auth": {
+    "type": "bearer",
+    "bearer": [{ "key": "token", "value": "{{access_token}}", "type": "string" }]
+  },
+  "variable": [
+    { "key": "base_url", "value": "http://127.0.0.1:8000" },
+    { "key": "user_email", "value": "vivek@mpsglobal.com" },
+    { "key": "user_password", "value": "correct-horse-battery" },
+    { "key": "user_full_name", "value": "Vivek Pawar" },
+    { "key": "company_name", "value": "MPS Group" },
+    { "key": "otp", "value": "", "description": "6-digit code -- copy from the server console/log output (ConsoleEmailService)" },
+    { "key": "access_token", "value": "" },
+    { "key": "refresh_token", "value": "" },
+    { "key": "reset_token", "value": "" },
+    { "key": "company_id", "value": "" },
+    { "key": "product_id", "value": "" },
+    { "key": "sub_product_id", "value": "" },
+    { "key": "member_id", "value": "" },
+    { "key": "existing_user_id", "value": "", "description": "Fill manually from a Company Members list response's user_id, for Add Product Member" },
+    { "key": "product_member_id", "value": "" },
+    { "key": "social_account_id", "value": "" },
+    { "key": "job_id", "value": "" },
+    { "key": "concept_id", "value": "" },
+    { "key": "asset_id", "value": "", "description": "Fill manually from a concept detail response's assets[].id" },
+    { "key": "log_id", "value": "" }
+  ],
+  "item": [
+    {
+      "name": "Auth",
+      "item": [
+        {
+          "name": "Register",
+          "request": {
+            "auth": { "type": "noauth" },
+            "method": "POST",
+            "header": [],
+            "body": {
+              "mode": "raw",
+              "options": { "raw": { "language": "json" } },
+              "raw": "{\n  \"email\": \"{{user_email}}\",\n  \"password\": \"{{user_password}}\",\n  \"full_name\": \"{{user_full_name}}\",\n  \"company_name\": \"{{company_name}}\"\n}"
+            },
+            "url": "{{base_url}}/api/v1/auth/register",
+            "description": "Creates the user + a DRAFT/pending_approval company (COMPANY_ADMIN role), and emails a 6-digit verification code.\n\nFields:\n- password: min 10 characters.\n- Auto-saves `company_id` from the response."
+          },
+          "event": [
+            {
+              "listen": "test",
+              "script": {
+                "type": "text/javascript",
+                "exec": [
+                  "if (pm.response.code === 201) {",
+                  "    const body = pm.response.json();",
+                  "    pm.collectionVariables.set('company_id', body.company.id);",
+                  "    console.log('Saved company_id =', body.company.id);",
+                  "}"
+                ]
+              }
+            }
+          ]
+        },
+        {
+          "name": "Verify Email",
+          "request": {
+            "auth": { "type": "noauth" },
+            "method": "POST",
+            "header": [],
+            "body": {
+              "mode": "raw",
+              "options": { "raw": { "language": "json" } },
+              "raw": "{\n  \"email\": \"{{user_email}}\",\n  \"otp\": \"{{otp}}\"\n}"
+            },
+            "url": "{{base_url}}/api/v1/auth/verify-email",
+            "description": "Confirms the 6-digit code emailed at registration. `otp` must be exactly 6 digits."
+          }
+        },
+        {
+          "name": "Resend Verification",
+          "request": {
+            "auth": { "type": "noauth" },
+            "method": "POST",
+            "header": [],
+            "body": {
+              "mode": "raw",
+              "options": { "raw": { "language": "json" } },
+              "raw": "{\n  \"email\": \"{{user_email}}\"\n}"
+            },
+            "url": "{{base_url}}/api/v1/auth/resend-verification",
+            "description": "Re-sends a fresh verification code. Always returns the same generic message, whether or not the email exists (no account enumeration)."
+          }
+        },
+        {
+          "name": "Login",
+          "request": {
+            "auth": { "type": "noauth" },
+            "method": "POST",
+            "header": [],
+            "body": {
+              "mode": "raw",
+              "options": { "raw": { "language": "json" } },
+              "raw": "{\n  \"email\": \"{{user_email}}\",\n  \"password\": \"{{user_password}}\"\n}"
+            },
+            "url": "{{base_url}}/api/v1/auth/login",
+            "description": "Auto-saves `access_token` / `refresh_token`. Fails with 403 if the email isn't verified yet, or the company is pending_approval/rejected/suspended."
+          },
+          "event": [
+            {
+              "listen": "test",
+              "script": {
+                "type": "text/javascript",
+                "exec": [
+                  "if (pm.response.code === 200) {",
+                  "    const body = pm.response.json();",
+                  "    pm.collectionVariables.set('access_token', body.access_token);",
+                  "    pm.collectionVariables.set('refresh_token', body.refresh_token);",
+                  "    console.log('Saved access_token/refresh_token');",
+                  "}"
+                ]
+              }
+            }
+          ]
+        },
+        {
+          "name": "Refresh Token",
+          "request": {
+            "auth": { "type": "noauth" },
+            "method": "POST",
+            "header": [],
+            "body": {
+              "mode": "raw",
+              "options": { "raw": { "language": "json" } },
+              "raw": "{\n  \"refresh_token\": \"{{refresh_token}}\"\n}"
+            },
+            "url": "{{base_url}}/api/v1/auth/refresh",
+            "description": "Rotates the refresh token (old one is revoked). Auto-saves the new pair."
+          },
+          "event": [
+            {
+              "listen": "test",
+              "script": {
+                "type": "text/javascript",
+                "exec": [
+                  "if (pm.response.code === 200) {",
+                  "    const body = pm.response.json();",
+                  "    pm.collectionVariables.set('access_token', body.access_token);",
+                  "    pm.collectionVariables.set('refresh_token', body.refresh_token);",
+                  "}"
+                ]
+              }
+            }
+          ]
+        },
+        {
+          "name": "Logout",
+          "request": {
+            "method": "POST",
+            "header": [],
+            "body": {
+              "mode": "raw",
+              "options": { "raw": { "language": "json" } },
+              "raw": "{\n  \"refresh_token\": \"{{refresh_token}}\"\n}"
+            },
+            "url": "{{base_url}}/api/v1/auth/logout",
+            "description": "Revokes just this one refresh token/session."
+          }
+        },
+        {
+          "name": "Logout All",
+          "request": {
+            "method": "POST",
+            "header": [],
+            "body": { "mode": "raw", "raw": "" },
+            "url": "{{base_url}}/api/v1/auth/logout-all",
+            "description": "Revokes every session for the current user (bumps token_version)."
+          }
+        },
+        {
+          "name": "Me",
+          "request": {
+            "method": "GET",
+            "header": [],
+            "url": "{{base_url}}/api/v1/auth/me",
+            "description": "The current user's profile plus every company/product membership -- useful for grabbing ids while testing."
+          }
+        },
+        {
+          "name": "Forgot Password",
+          "request": {
+            "auth": { "type": "noauth" },
+            "method": "POST",
+            "header": [],
+            "body": {
+              "mode": "raw",
+              "options": { "raw": { "language": "json" } },
+              "raw": "{\n  \"email\": \"{{user_email}}\"\n}"
+            },
+            "url": "{{base_url}}/api/v1/auth/forgot-password",
+            "description": "Emails a separate 6-digit password-reset code (different from the email-verification one)."
+          }
+        },
+        {
+          "name": "Verify Reset OTP",
+          "request": {
+            "auth": { "type": "noauth" },
+            "method": "POST",
+            "header": [],
+            "body": {
+              "mode": "raw",
+              "options": { "raw": { "language": "json" } },
+              "raw": "{\n  \"email\": \"{{user_email}}\",\n  \"otp\": \"{{otp}}\"\n}"
+            },
+            "url": "{{base_url}}/api/v1/auth/verify-reset-otp",
+            "description": "Consumes the forgot-password code, auto-saves `reset_token` for Reset Password."
+          },
+          "event": [
+            {
+              "listen": "test",
+              "script": {
+                "type": "text/javascript",
+                "exec": [
+                  "if (pm.response.code === 200) {",
+                  "    pm.collectionVariables.set('reset_token', pm.response.json().reset_token);",
+                  "}"
+                ]
+              }
+            }
+          ]
+        },
+        {
+          "name": "Reset Password",
+          "request": {
+            "auth": { "type": "noauth" },
+            "method": "POST",
+            "header": [],
+            "body": {
+              "mode": "raw",
+              "options": { "raw": { "language": "json" } },
+              "raw": "{\n  \"reset_token\": \"{{reset_token}}\",\n  \"new_password\": \"a-new-strong-password\"\n}"
+            },
+            "url": "{{base_url}}/api/v1/auth/reset-password",
+            "description": "new_password: min 10 characters. Revokes all existing sessions."
+          }
+        },
+        {
+          "name": "Change Password",
+          "request": {
+            "method": "POST",
+            "header": [],
+            "body": {
+              "mode": "raw",
+              "options": { "raw": { "language": "json" } },
+              "raw": "{\n  \"current_password\": \"{{user_password}}\",\n  \"new_password\": \"a-new-strong-password\"\n}"
+            },
+            "url": "{{base_url}}/api/v1/auth/change-password",
+            "description": "Requires the current password. new_password: min 10 characters. Revokes all existing sessions -- you'll need to log in again."
+          }
+        }
+      ]
+    },
+    {
+      "name": "Company Onboarding",
+      "item": [
+        {
+          "name": "Select Brand Structure",
+          "request": {
+            "method": "PATCH",
+            "header": [],
+            "body": {
+              "mode": "raw",
+              "options": { "raw": { "language": "json" } },
+              "raw": "{\n  \"brand_structure\": \"multi_brand\"\n}"
+            },
+            "url": "{{base_url}}/api/v1/companies/{{company_id}}/brand-structure",
+            "description": "brand_structure options: single_brand | multi_brand | unsure.\n\nCompany Admin only."
+          }
+        },
+        {
+          "name": "Update Single-Brand Details",
+          "request": {
+            "method": "PATCH",
+            "header": [],
+            "body": {
+              "mode": "raw",
+              "options": { "raw": { "language": "json" } },
+              "raw": "{\n  \"industry\": \"Insurance\"\n}"
+            },
+            "url": "{{base_url}}/api/v1/companies/{{company_id}}/single-brand-details",
+            "description": "Phase 4A (single_brand path). Sets the industry dropdown value onto the company-level brand profile. Company Admin only."
+          }
+        },
+        {
+          "name": "Update Group Profile",
+          "request": {
+            "method": "PATCH",
+            "header": [],
+            "body": {
+              "mode": "raw",
+              "options": { "raw": { "language": "json" } },
+              "raw": "{\n  \"group_website_url\": \"https://themps.global\"\n}"
+            },
+            "url": "{{base_url}}/api/v1/companies/{{company_id}}/group-profile",
+            "description": "Phase 4B (multi_brand path). Both fields optional. Company Admin only."
+          }
+        },
+        {
+          "name": "Upload Group Logo",
+          "request": {
+            "method": "PUT",
+            "header": [],
+            "body": {
+              "mode": "formdata",
+              "formdata": [
+                { "key": "file", "type": "file", "src": [] }
+              ]
+            },
+            "url": "{{base_url}}/api/v1/companies/{{company_id}}/group-profile/logo",
+            "description": "multipart/form-data, field name `file`. Accepts image/png, image/jpeg, image/webp. Company Admin only."
+          }
+        },
+        {
+          "name": "Get Onboarding Status",
+          "request": {
+            "method": "GET",
+            "header": [],
+            "url": "{{base_url}}/api/v1/companies/{{company_id}}/onboarding",
+            "description": "onboarding_step values: registered | email_verified | brand_structure_selected | brand_profile_completed | first_product_created | completed."
+          }
+        },
+        {
+          "name": "Complete Onboarding",
+          "request": {
+            "method": "POST",
+            "header": [],
+            "body": { "mode": "raw", "raw": "" },
+            "url": "{{base_url}}/api/v1/companies/{{company_id}}/onboarding/complete",
+            "description": "Marks onboarding_step = completed (Phase 12's \"workspace ready\" action, after sub-products/social/team are done or skipped). Company Admin only."
+          }
+        }
+      ]
+    },
+    {
+      "name": "Company Members",
+      "item": [
+        {
+          "name": "List Company Members",
+          "request": {
+            "method": "GET",
+            "header": [],
+            "url": "{{base_url}}/api/v1/companies/{{company_id}}/members"
+          }
+        },
+        {
+          "name": "Add Company Member",
+          "request": {
+            "method": "POST",
+            "header": [],
+            "body": {
+              "mode": "raw",
+              "options": { "raw": { "language": "json" } },
+              "raw": "{\n  \"email\": \"content@policyplanner.com\",\n  \"full_name\": \"Content Creator\",\n  \"role\": \"member\"\n}"
+            },
+            "url": "{{base_url}}/api/v1/companies/{{company_id}}/members",
+            "description": "role options: company_admin | member.\n\n`full_name` is only required if the email doesn't match an existing user -- a new account is created and emailed generated credentials. Company Admin only. Auto-saves `member_id`."
+          },
+          "event": [
+            {
+              "listen": "test",
+              "script": {
+                "type": "text/javascript",
+                "exec": [
+                  "if (pm.response.code === 201) {",
+                  "    const body = pm.response.json();",
+                  "    pm.collectionVariables.set('member_id', body.id);",
+                  "    pm.collectionVariables.set('existing_user_id', body.user_id);",
+                  "}"
+                ]
+              }
+            }
+          ]
+        },
+        {
+          "name": "Update Company Member",
+          "request": {
+            "method": "PATCH",
+            "header": [],
+            "body": {
+              "mode": "raw",
+              "options": { "raw": { "language": "json" } },
+              "raw": "{\n  \"role\": \"member\",\n  \"status\": \"active\"\n}"
+            },
+            "url": "{{base_url}}/api/v1/companies/{{company_id}}/members/{{member_id}}",
+            "description": "role options: company_admin | member. status options: active | suspended. Both fields optional. Company Admin only."
+          }
+        },
+        {
+          "name": "Remove Company Member",
+          "request": {
+            "method": "DELETE",
+            "header": [],
+            "url": "{{base_url}}/api/v1/companies/{{company_id}}/members/{{member_id}}",
+            "description": "Company Admin only. Cannot remove the last active company_admin."
+          }
+        }
+      ]
+    },
+    {
+      "name": "Brand Profiles",
+      "item": [
+        {
+          "name": "Company Scope",
+          "item": [
+            {
+              "name": "Get Company Brand Profile",
+              "request": {
+                "method": "GET",
+                "header": [],
+                "url": "{{base_url}}/api/v1/companies/{{company_id}}/brand-profile"
+              }
+            },
+            {
+              "name": "Upsert Company Brand Profile",
+              "request": {
+                "method": "PUT",
+                "header": [],
+                "body": {
+                  "mode": "raw",
+                  "options": { "raw": { "language": "json" } },
+                  "raw": "{\n  \"name\": \"MPS Group\",\n  \"tagline\": \"Plan for Future\",\n  \"description\": \"MPS Group provides professional business services.\",\n  \"contact_email\": \"hello@themps.global\",\n  \"contact_number\": \"+91-9999999999\",\n  \"social_links\": {\n    \"instagram\": \"https://instagram.com/mpsglobal\",\n    \"linkedin\": \"https://linkedin.com/company/mpsglobal\"\n  },\n  \"regulatory_category\": \"\",\n  \"category\": \"Business Services\",\n  \"market\": \"India\",\n  \"audience_primary\": \"Businesses and professionals\",\n  \"audience_secondary\": \"Individuals\",\n  \"tone\": [\"Professional\", \"Reliable\", \"Modern\"],\n  \"languages\": [\"en\", \"hi\"],\n  \"voice\": \"Confident, plain-language, never salesy.\",\n  \"pillars\": [\"trust\", \"expertise\"],\n  \"website_url\": \"https://themps.global\",\n  \"domains\": [\"themps.global\"],\n  \"knowledge_notes\": [],\n  \"knowledge_urls\": [],\n  \"ai_instructions\": \"\",\n  \"visual_identity\": {\n    \"palette\": [\"Navy Blue\", \"White\", \"Gold\"],\n    \"heading_font\": \"\",\n    \"body_font\": \"\",\n    \"style_keywords\": [],\n    \"avoid\": []\n  },\n  \"compliance_mandatory_disclaimer\": \"\",\n  \"compliance_secondary_disclaimers\": [],\n  \"compliance_banned_claims\": [],\n  \"compliance_rules\": [],\n  \"cta_bank\": [],\n  \"hashtag_bank\": [],\n  \"product_lines\": []\n}"
+                },
+                "url": "{{base_url}}/api/v1/companies/{{company_id}}/brand-profile",
+                "description": "languages items are ISO-ish codes: en | hi | hinglish. Full replace (upsert) -- always send every field you want kept. Company Admin only."
+              }
+            },
+            {
+              "name": "Upload Company Logo",
+              "request": {
+                "method": "PUT",
+                "header": [],
+                "body": { "mode": "formdata", "formdata": [{ "key": "file", "type": "file", "src": [] }] },
+                "url": "{{base_url}}/api/v1/companies/{{company_id}}/brand-profile/logo",
+                "description": "multipart/form-data, field name `file`. image/png, image/jpeg, or image/webp only."
+              }
+            },
+            {
+              "name": "Download Company Logo",
+              "request": {
+                "method": "GET",
+                "header": [],
+                "url": "{{base_url}}/api/v1/companies/{{company_id}}/brand-profile/logo"
+              }
+            }
+          ]
+        },
+        {
+          "name": "Product Scope",
+          "item": [
+            {
+              "name": "Get Product Brand Profile",
+              "request": {
+                "method": "GET",
+                "header": [],
+                "url": "{{base_url}}/api/v1/products/{{product_id}}/brand-profile"
+              }
+            },
+            {
+              "name": "Get Product Effective Brand Profile",
+              "request": {
+                "method": "GET",
+                "header": [],
+                "url": "{{base_url}}/api/v1/products/{{product_id}}/brand-profile/effective",
+                "description": "The brand profile actually applied to this product -- its own if branding_mode=separate_brand and one is set, otherwise resolved up to the company's."
+              }
+            },
+            {
+              "name": "Upsert Product Brand Profile",
+              "request": {
+                "method": "PUT",
+                "header": [],
+                "body": {
+                  "mode": "raw",
+                  "options": { "raw": { "language": "json" } },
+                  "raw": "{\n  \"name\": \"Policy Planner\",\n  \"tagline\": \"Plan for Future\",\n  \"description\": \"Policy Planner helps families find the right insurance.\",\n  \"contact_email\": \"support@policyplanner.com\",\n  \"contact_number\": \"\",\n  \"social_links\": {},\n  \"regulatory_category\": \"Insurance\",\n  \"category\": \"Insurance\",\n  \"market\": \"India\",\n  \"audience_primary\": \"Individuals and families\",\n  \"audience_secondary\": \"Small businesses\",\n  \"tone\": [\"Professional\", \"Educational\", \"Trustworthy\"],\n  \"languages\": [\"en\", \"hi\", \"hinglish\"],\n  \"voice\": \"Clear, reassuring, never fear-mongering.\",\n  \"pillars\": [\"education\", \"trust\", \"convenience\"],\n  \"website_url\": \"https://policyplanner.com\",\n  \"domains\": [\"policyplanner.com\"],\n  \"knowledge_notes\": [],\n  \"knowledge_urls\": [],\n  \"ai_instructions\": \"Always mention the 24/7 claims helpline.\",\n  \"visual_identity\": {\n    \"palette\": [\"Blue\", \"White\"],\n    \"heading_font\": \"Inter\",\n    \"body_font\": \"Inter\",\n    \"style_keywords\": [\"clean\", \"trustworthy\"],\n    \"avoid\": [\"clutter\"]\n  },\n  \"compliance_mandatory_disclaimer\": \"Insurance is the subject matter of solicitation.\",\n  \"compliance_secondary_disclaimers\": [\"T&C apply.\"],\n  \"compliance_banned_claims\": [\"guaranteed claim approval\"],\n  \"compliance_rules\": [\"Never name a premium without 'starting from'.\"],\n  \"cta_bank\": [\"Get a quote in 60 seconds\"],\n  \"hashtag_bank\": [\"#Insurance\", \"#PolicyPlanner\"],\n  \"product_lines\": [\n    {\n      \"id\": \"travel\",\n      \"label\": \"Travel Insurance\",\n      \"partners\": [\"Bajaj Allianz\"],\n      \"hooks\": [\"trip cancellation\", \"medical emergency abroad\"]\n    }\n  ]\n}"
+                },
+                "url": "{{base_url}}/api/v1/products/{{product_id}}/brand-profile",
+                "description": "languages items: en | hi | hinglish. product_lines[].id is what CreativeBrief.product_line must match when generating content. Product Manager (or Company Admin) only."
+              }
+            },
+            {
+              "name": "Upload Product Avatar",
+              "request": {
+                "method": "PUT",
+                "header": [],
+                "body": { "mode": "formdata", "formdata": [{ "key": "file", "type": "file", "src": [] }] },
+                "url": "{{base_url}}/api/v1/products/{{product_id}}/brand-profile/avatar",
+                "description": "multipart/form-data, field name `file`. Used as the recurring face for ReelStyle=avatar reels."
+              }
+            },
+            {
+              "name": "Download Product Avatar",
+              "request": { "method": "GET", "header": [], "url": "{{base_url}}/api/v1/products/{{product_id}}/brand-profile/avatar" }
+            },
+            {
+              "name": "Upload Product Logo",
+              "request": {
+                "method": "PUT",
+                "header": [],
+                "body": { "mode": "formdata", "formdata": [{ "key": "file", "type": "file", "src": [] }] },
+                "url": "{{base_url}}/api/v1/products/{{product_id}}/brand-profile/logo"
+              }
+            },
+            {
+              "name": "Download Product Logo",
+              "request": { "method": "GET", "header": [], "url": "{{base_url}}/api/v1/products/{{product_id}}/brand-profile/logo" }
+            },
+            {
+              "name": "Upload Product Dark Logo",
+              "request": {
+                "method": "PUT",
+                "header": [],
+                "body": { "mode": "formdata", "formdata": [{ "key": "file", "type": "file", "src": [] }] },
+                "url": "{{base_url}}/api/v1/products/{{product_id}}/brand-profile/logo-dark"
+              }
+            },
+            {
+              "name": "Download Product Dark Logo",
+              "request": { "method": "GET", "header": [], "url": "{{base_url}}/api/v1/products/{{product_id}}/brand-profile/logo-dark" }
+            },
+            {
+              "name": "Upload Product Icon",
+              "request": {
+                "method": "PUT",
+                "header": [],
+                "body": { "mode": "formdata", "formdata": [{ "key": "file", "type": "file", "src": [] }] },
+                "url": "{{base_url}}/api/v1/products/{{product_id}}/brand-profile/icon"
+              }
+            },
+            {
+              "name": "Download Product Icon",
+              "request": { "method": "GET", "header": [], "url": "{{base_url}}/api/v1/products/{{product_id}}/brand-profile/icon" }
+            }
+          ]
+        },
+        {
+          "name": "Sub-product Scope",
+          "item": [
+            {
+              "name": "Get Sub-product Brand Profile",
+              "request": { "method": "GET", "header": [], "url": "{{base_url}}/api/v1/sub-products/{{sub_product_id}}/brand-profile" }
+            },
+            {
+              "name": "Get Sub-product Effective Brand Profile",
+              "request": {
+                "method": "GET",
+                "header": [],
+                "url": "{{base_url}}/api/v1/sub-products/{{sub_product_id}}/brand-profile/effective",
+                "description": "Resolved profile -- the sub-product's own (if branding_mode=separate_brand) or its parent product's/company's."
+              }
+            },
+            {
+              "name": "Upsert Sub-product Brand Profile",
+              "request": {
+                "method": "PUT",
+                "header": [],
+                "body": {
+                  "mode": "raw",
+                  "options": { "raw": { "language": "json" } },
+                  "raw": "{\n  \"name\": \"Health Insurance\",\n  \"category\": \"Insurance\",\n  \"market\": \"India\",\n  \"audience_primary\": \"Young families\",\n  \"compliance_mandatory_disclaimer\": \"Insurance is the subject matter of solicitation.\"\n}"
+                },
+                "url": "{{base_url}}/api/v1/sub-products/{{sub_product_id}}/brand-profile",
+                "description": "Same shape as the product-scope upsert (only the required fields are shown here for brevity) -- only meaningful when the sub-product's branding_mode is separate_brand."
+              }
+            },
+            {
+              "name": "Upload Sub-product Logo",
+              "request": {
+                "method": "PUT",
+                "header": [],
+                "body": { "mode": "formdata", "formdata": [{ "key": "file", "type": "file", "src": [] }] },
+                "url": "{{base_url}}/api/v1/sub-products/{{sub_product_id}}/brand-profile/logo"
+              }
+            },
+            {
+              "name": "Download Sub-product Logo",
+              "request": { "method": "GET", "header": [], "url": "{{base_url}}/api/v1/sub-products/{{sub_product_id}}/brand-profile/logo" }
+            }
+          ]
+        }
+      ]
+    },
+    {
+      "name": "Brand Analysis (AI)",
+      "item": [
+        {
+          "name": "Analyze Company Brand Profile",
+          "request": {
+            "method": "POST",
+            "header": [],
+            "body": {
+              "mode": "raw",
+              "options": { "raw": { "language": "json" } },
+              "raw": "{\n  \"website_url\": \"https://themps.global\",\n  \"description\": \"\",\n  \"dry_run\": true\n}"
+            },
+            "url": "{{base_url}}/api/v1/companies/{{company_id}}/brand-profile/analyze",
+            "description": "Phase 5. Provide EITHER website_url OR description (at least one required). Set dry_run=false to use the real Gemini API (needs GEMINI_API_KEY configured server-side and costs money) -- leave it true to use the free deterministic mock. Company Admin only."
+          }
+        },
+        {
+          "name": "Analyze Product Brand Profile",
+          "request": {
+            "method": "POST",
+            "header": [],
+            "body": {
+              "mode": "raw",
+              "options": { "raw": { "language": "json" } },
+              "raw": "{\n  \"website_url\": \"https://policyplanner.com\",\n  \"description\": \"\",\n  \"dry_run\": true\n}"
+            },
+            "url": "{{base_url}}/api/v1/products/{{product_id}}/brand-profile/analyze",
+            "description": "Same shape as company-scope analyze. Product Manager (or Company Admin) only."
+          }
+        },
+        {
+          "name": "Analyze Sub-product Brand Profile",
+          "request": {
+            "method": "POST",
+            "header": [],
+            "body": {
+              "mode": "raw",
+              "options": { "raw": { "language": "json" } },
+              "raw": "{\n  \"website_url\": \"\",\n  \"description\": \"Health insurance plans for young families.\",\n  \"dry_run\": true\n}"
+            },
+            "url": "{{base_url}}/api/v1/sub-products/{{sub_product_id}}/brand-profile/analyze"
+          }
+        }
+      ]
+    },
+    {
+      "name": "Products",
+      "item": [
+        {
+          "name": "List Products",
+          "request": { "method": "GET", "header": [], "url": "{{base_url}}/api/v1/companies/{{company_id}}/products" }
+        },
+        {
+          "name": "Create Product",
+          "request": {
+            "method": "POST",
+            "header": [],
+            "body": {
+              "mode": "raw",
+              "options": { "raw": { "language": "json" } },
+              "raw": "{\n  \"name\": \"Policy Planner\",\n  \"description\": \"\",\n  \"branding_mode\": \"separate_brand\"\n}"
+            },
+            "url": "{{base_url}}/api/v1/companies/{{company_id}}/products",
+            "description": "branding_mode options: use_company_branding | separate_brand (Phase 7's radio choice; default separate_brand). Company Admin only. Auto-saves `product_id`."
+          },
+          "event": [
+            {
+              "listen": "test",
+              "script": {
+                "type": "text/javascript",
+                "exec": [
+                  "if (pm.response.code === 201) {",
+                  "    pm.collectionVariables.set('product_id', pm.response.json().id);",
+                  "}"
+                ]
+              }
+            }
+          ]
+        },
+        {
+          "name": "Update Product",
+          "request": {
+            "method": "PATCH",
+            "header": [],
+            "body": {
+              "mode": "raw",
+              "options": { "raw": { "language": "json" } },
+              "raw": "{\n  \"name\": \"Policy Planner\",\n  \"description\": \"\",\n  \"status\": \"active\",\n  \"branding_mode\": \"separate_brand\",\n  \"approval_policy\": \"no_approval\"\n}"
+            },
+            "url": "{{base_url}}/api/v1/products/{{product_id}}",
+            "description": "All fields optional -- send only what changes.\nstatus options: active | archived.\nbranding_mode options: use_company_branding | separate_brand.\napproval_policy options (Phase 20): no_approval | one_approver | product_manager_approval | company_admin_approval.\n\nProduct Manager (or Company Admin) only."
+          }
+        },
+        {
+          "name": "Delete Product",
+          "request": { "method": "DELETE", "header": [], "url": "{{base_url}}/api/v1/products/{{product_id}}" }
+        },
+        {
+          "name": "Get Product Dashboard",
+          "request": {
+            "method": "GET",
+            "header": [],
+            "url": "{{base_url}}/api/v1/products/{{product_id}}/dashboard",
+            "description": "Phase 13 cards: drafts, pending_approvals, scheduled, published, failed_jobs, social_accounts_total/active."
+          }
+        },
+        {
+          "name": "List Product Members",
+          "request": { "method": "GET", "header": [], "url": "{{base_url}}/api/v1/products/{{product_id}}/members" }
+        },
+        {
+          "name": "Add Product Member",
+          "request": {
+            "method": "POST",
+            "header": [],
+            "body": {
+              "mode": "raw",
+              "options": { "raw": { "language": "json" } },
+              "raw": "{\n  \"user_id\": \"{{existing_user_id}}\",\n  \"role\": \"creator\",\n  \"sub_product_ids\": []\n}"
+            },
+            "url": "{{base_url}}/api/v1/products/{{product_id}}/members",
+            "description": "role options: creator | approver | publisher | analyst | product_manager. Requires the user already be a company member (use Company Members > Add first, or Invite Product Member below to do both in one step). sub_product_ids empty = all sub-products. Product Manager (or Company Admin) only."
+          }
+        },
+        {
+          "name": "Invite Product Member (by email)",
+          "request": {
+            "method": "POST",
+            "header": [],
+            "body": {
+              "mode": "raw",
+              "options": { "raw": { "language": "json" } },
+              "raw": "{\n  \"email\": \"content@policyplanner.com\",\n  \"full_name\": \"Content Creator\",\n  \"role\": \"creator\",\n  \"sub_product_ids\": []\n}"
+            },
+            "url": "{{base_url}}/api/v1/products/{{product_id}}/invitations",
+            "description": "Phase 11. role options: creator | approver | publisher | analyst | product_manager. Creates the User (if new, emails generated credentials) and the CompanyMember (if needed) in the same call as the ProductMember. sub_product_ids empty = all sub-products. Product Manager (or Company Admin) only."
+          },
+          "event": [
+            {
+              "listen": "test",
+              "script": {
+                "type": "text/javascript",
+                "exec": [
+                  "if (pm.response.code === 201) {",
+                  "    pm.collectionVariables.set('product_member_id', pm.response.json().id);",
+                  "}"
+                ]
+              }
+            }
+          ]
+        },
+        {
+          "name": "Remove Product Member",
+          "request": { "method": "DELETE", "header": [], "url": "{{base_url}}/api/v1/products/{{product_id}}/members/{{product_member_id}}" }
+        }
+      ]
+    },
+    {
+      "name": "Sub-products",
+      "item": [
+        {
+          "name": "List Sub-products",
+          "request": { "method": "GET", "header": [], "url": "{{base_url}}/api/v1/products/{{product_id}}/sub-products" }
+        },
+        {
+          "name": "Create Sub-products (batch)",
+          "request": {
+            "method": "POST",
+            "header": [],
+            "body": {
+              "mode": "raw",
+              "options": { "raw": { "language": "json" } },
+              "raw": "{\n  \"names\": [\"Health Insurance\", \"Term Insurance\", \"Motor Insurance\"]\n}"
+            },
+            "url": "{{base_url}}/api/v1/products/{{product_id}}/sub-products",
+            "description": "Phase 9's quick-add -- names only, one or many in one call. Each inherits the parent product's branding (branding_mode=use_product_branding) until changed. Product Manager (or Company Admin) only. Auto-saves the first created sub-product's id."
+          },
+          "event": [
+            {
+              "listen": "test",
+              "script": {
+                "type": "text/javascript",
+                "exec": [
+                  "if (pm.response.code === 201) {",
+                  "    const body = pm.response.json();",
+                  "    if (body.length) pm.collectionVariables.set('sub_product_id', body[0].id);",
+                  "}"
+                ]
+              }
+            }
+          ]
+        },
+        {
+          "name": "Update Sub-product",
+          "request": {
+            "method": "PATCH",
+            "header": [],
+            "body": {
+              "mode": "raw",
+              "options": { "raw": { "language": "json" } },
+              "raw": "{\n  \"name\": \"Health Cover\",\n  \"status\": \"active\",\n  \"branding_mode\": \"use_product_branding\"\n}"
+            },
+            "url": "{{base_url}}/api/v1/sub-products/{{sub_product_id}}",
+            "description": "All fields optional. status options: active | archived. branding_mode options: use_product_branding | separate_brand. Product Manager (or Company Admin) only."
+          }
+        },
+        {
+          "name": "Delete Sub-product",
+          "request": { "method": "DELETE", "header": [], "url": "{{base_url}}/api/v1/sub-products/{{sub_product_id}}" }
+        }
+      ]
+    },
+    {
+      "name": "Social Accounts",
+      "item": [
+        {
+          "name": "List Social Accounts",
+          "request": { "method": "GET", "header": [], "url": "{{base_url}}/api/v1/products/{{product_id}}/social-accounts" }
+        },
+        {
+          "name": "Add Social Account",
+          "request": {
+            "method": "POST",
+            "header": [],
+            "body": {
+              "mode": "raw",
+              "options": { "raw": { "language": "json" } },
+              "raw": "{\n  \"platform\": \"instagram\",\n  \"handle\": \"@policyplanner\",\n  \"profile_url\": \"https://instagram.com/policyplanner\",\n  \"scope\": \"product\",\n  \"sub_product_ids\": []\n}"
+            },
+            "url": "{{base_url}}/api/v1/products/{{product_id}}/social-accounts",
+            "description": "platform options: instagram | facebook | youtube | google | twitter | linkedin.\nscope options (Phase 10's \"Where should this account be available?\"): product | sub_products | company.\nsub_product_ids only meaningful when scope=sub_products (empty = all).\n\nManual entry -- no OAuth flow exists yet, so no password/token is ever collected. Auto-saves `social_account_id`."
+          },
+          "event": [
+            {
+              "listen": "test",
+              "script": {
+                "type": "text/javascript",
+                "exec": [
+                  "if (pm.response.code === 201) {",
+                  "    pm.collectionVariables.set('social_account_id', pm.response.json().id);",
+                  "}"
+                ]
+              }
+            }
+          ]
+        },
+        {
+          "name": "Remove Social Account",
+          "request": {
+            "method": "DELETE",
+            "header": [],
+            "url": "{{base_url}}/api/v1/products/{{product_id}}/social-accounts/{{social_account_id}}",
+            "description": "Product Manager (or Company Admin) only."
+          }
+        }
+      ]
+    },
+    {
+      "name": "Creatives (AI Content)",
+      "item": [
+        {
+          "name": "Generate Creatives (Quick Create)",
+          "request": {
+            "method": "POST",
+            "header": [],
+            "body": {
+              "mode": "raw",
+              "options": { "raw": { "language": "json" } },
+              "raw": "{\n  \"product_line\": \"travel\",\n  \"topic\": \"Why young families need travel insurance\",\n  \"format\": \"post\",\n  \"carousel_slides\": null,\n  \"reel_duration_s\": null,\n  \"language\": \"en\",\n  \"concept_count\": 3,\n  \"quality\": \"standard\",\n  \"extra_notes\": \"\",\n  \"voiceover\": null,\n  \"reel_style\": null,\n  \"platforms\": [\"instagram\", \"facebook\"],\n  \"sub_product_id\": null,\n  \"objective\": \"\",\n  \"offer\": \"\",\n  \"festival_occasion\": \"\",\n  \"audience_override\": null,\n  \"tone_override\": null,\n  \"cta_override\": null,\n  \"reference_image_storage_key\": null,\n  \"publishing_date\": null,\n  \"force\": false,\n  \"dry_run\": true\n}"
+            },
+            "url": "{{base_url}}/api/v1/products/{{product_id}}/creatives/generate",
+            "description": "product_line must match a `product_lines[].id` on the resolved brand profile.\nformat options: post | carousel | reel (carousel_slides required 3-8 for carousel; reel_duration_s 8-30s + voiceover + reel_style for reel).\nlanguage options: en | hi | hinglish.\nquality options: draft | standard | hero.\nvoiceover options (reel only): native_audio | silent_text.\nreel_style options (reel only): story | avatar (avatar needs a product avatar image uploaded first).\nplatforms items: instagram | facebook | youtube | google | twitter | linkedin.\nforce=true bypasses the identical-brief idempotency check.\ndry_run=true uses the free mock AI provider (real generation needs GEMINI_API_KEY configured server-side and costs money).\n\nReturns 202 with a GenerationJob. Auto-saves `job_id`."
+          },
+          "event": [
+            {
+              "listen": "test",
+              "script": {
+                "type": "text/javascript",
+                "exec": [
+                  "if (pm.response.code === 202) {",
+                  "    pm.collectionVariables.set('job_id', pm.response.json().id);",
+                  "}"
+                ]
+              }
+            }
+          ]
+        },
+        {
+          "name": "Get Generation Job",
+          "request": {
+            "method": "GET",
+            "header": [],
+            "url": "{{base_url}}/api/v1/products/{{product_id}}/creatives/jobs/{{job_id}}",
+            "description": "status options: queued | running | awaiting_render | succeeded | failed | partially_failed. Poll this until it's terminal."
+          }
+        },
+        {
+          "name": "Render Assets (reel jobs only)",
+          "request": {
+            "method": "POST",
+            "header": [],
+            "body": { "mode": "raw", "raw": "" },
+            "url": "{{base_url}}/api/v1/products/{{product_id}}/creatives/jobs/{{job_id}}/render-assets",
+            "description": "Only valid when the job's status is awaiting_render (reel-format jobs pause here after ideation). 400s for a post/carousel job or a second call on the same job."
+          }
+        },
+        {
+          "name": "List Creative Concepts",
+          "request": {
+            "method": "GET",
+            "header": [],
+            "url": {
+              "raw": "{{base_url}}/api/v1/products/{{product_id}}/creatives?job_id={{job_id}}&status=draft",
+              "host": ["{{base_url}}"],
+              "path": ["api", "v1", "products", "{{product_id}}", "creatives"],
+              "query": [
+                { "key": "job_id", "value": "{{job_id}}", "description": "Optional -- filter to one generation job" },
+                { "key": "status", "value": "draft", "description": "Optional. Options: draft | in_review | approved | rejected | scheduled | published", "disabled": true }
+              ]
+            },
+            "description": "Auto-saves `concept_id` from the first result."
+          },
+          "event": [
+            {
+              "listen": "test",
+              "script": {
+                "type": "text/javascript",
+                "exec": [
+                  "if (pm.response.code === 200) {",
+                  "    const body = pm.response.json();",
+                  "    if (body.length) pm.collectionVariables.set('concept_id', body[0].id);",
+                  "}"
+                ]
+              }
+            }
+          ]
+        },
+        {
+          "name": "Get Creative Concept",
+          "request": {
+            "method": "GET",
+            "header": [],
+            "url": "{{base_url}}/api/v1/products/{{product_id}}/creatives/concepts/{{concept_id}}",
+            "description": "assets[] in the response carries each rendered image/video's `id` -- copy one into `asset_id` to try the download request below."
+          }
+        },
+        {
+          "name": "Submit Concept For Review",
+          "request": {
+            "method": "POST",
+            "header": [],
+            "body": { "mode": "raw", "raw": "" },
+            "url": "{{base_url}}/api/v1/products/{{product_id}}/creatives/concepts/{{concept_id}}/submit-for-review",
+            "description": "draft -> in_review."
+          }
+        },
+        {
+          "name": "Approve Concept",
+          "request": {
+            "method": "POST",
+            "header": [],
+            "body": { "mode": "raw", "raw": "" },
+            "url": "{{base_url}}/api/v1/products/{{product_id}}/creatives/concepts/{{concept_id}}/approve",
+            "description": "-> approved. Enforced against the product's approval_policy (see Update Product) -- a Company Admin always has authority regardless of policy."
+          }
+        },
+        {
+          "name": "Request Changes (Reject) Concept",
+          "request": {
+            "method": "POST",
+            "header": [],
+            "body": {
+              "mode": "raw",
+              "options": { "raw": { "language": "json" } },
+              "raw": "{\n  \"reason\": \"Tone feels off-brand, please make it more reassuring.\"\n}"
+            },
+            "url": "{{base_url}}/api/v1/products/{{product_id}}/creatives/concepts/{{concept_id}}/reject",
+            "description": "-> rejected, and files `reason` as a comment on the concept too. Same approval_policy enforcement as Approve."
+          }
+        },
+        {
+          "name": "Schedule Concept",
+          "request": {
+            "method": "POST",
+            "header": [],
+            "body": {
+              "mode": "raw",
+              "options": { "raw": { "language": "json" } },
+              "raw": "{\n  \"scheduled_at\": \"2026-09-15T09:30:00\"\n}"
+            },
+            "url": "{{base_url}}/api/v1/products/{{product_id}}/creatives/concepts/{{concept_id}}/schedule",
+            "description": "Only valid from status=approved -> scheduled. scheduled_at is an ISO-8601 datetime; this only records intent -- nothing auto-publishes at that time."
+          }
+        },
+        {
+          "name": "Publish Concept",
+          "request": {
+            "method": "POST",
+            "header": [],
+            "body": { "mode": "raw", "raw": "" },
+            "url": "{{base_url}}/api/v1/products/{{product_id}}/creatives/concepts/{{concept_id}}/publish",
+            "description": "Valid from approved or scheduled -> published. Records status/published_at only -- does not call out to any social platform (manual-entry social accounts, no OAuth)."
+          }
+        },
+        {
+          "name": "Approve and Publish (Company Admin shortcut)",
+          "request": {
+            "method": "POST",
+            "header": [],
+            "body": { "mode": "raw", "raw": "" },
+            "url": "{{base_url}}/api/v1/products/{{product_id}}/creatives/concepts/{{concept_id}}/approve-and-publish",
+            "description": "Phase 20: draft/in_review -> published in one call. Still subject to approval_policy unless the actor is a Company Admin."
+          }
+        },
+        {
+          "name": "List Concept Comments",
+          "request": { "method": "GET", "header": [], "url": "{{base_url}}/api/v1/products/{{product_id}}/creatives/concepts/{{concept_id}}/comments" }
+        },
+        {
+          "name": "Add Concept Comment",
+          "request": {
+            "method": "POST",
+            "header": [],
+            "body": {
+              "mode": "raw",
+              "options": { "raw": { "language": "json" } },
+              "raw": "{\n  \"body\": \"Can we brighten the hero image a little?\"\n}"
+            },
+            "url": "{{base_url}}/api/v1/products/{{product_id}}/creatives/concepts/{{concept_id}}/comments"
+          }
+        },
+        {
+          "name": "Download Creative Asset",
+          "request": {
+            "method": "GET",
+            "header": [],
+            "url": "{{base_url}}/api/v1/products/{{product_id}}/creatives/assets/{{asset_id}}/download",
+            "description": "Fill `asset_id` from a Get Creative Concept response's assets[].id first."
+          }
+        }
+      ]
+    },
+    {
+      "name": "Admin (Super Admin only)",
+      "description": "Log in as a Super Admin account first (create one server-side via `uv run python scripts/seed_super_admin.py`) -- there is no HTTP endpoint that creates one. Re-run Auth > Login with that account to refresh `access_token` before using this folder.",
+      "item": [
+        {
+          "name": "List Companies",
+          "request": {
+            "method": "GET",
+            "header": [],
+            "url": {
+              "raw": "{{base_url}}/api/v1/admin/companies?status=pending_approval",
+              "host": ["{{base_url}}"],
+              "path": ["api", "v1", "admin", "companies"],
+              "query": [
+                { "key": "status", "value": "pending_approval", "description": "Optional. Options: pending_approval | active | rejected | suspended", "disabled": true }
+              ]
+            }
+          }
+        },
+        {
+          "name": "Get Company Detail",
+          "request": { "method": "GET", "header": [], "url": "{{base_url}}/api/v1/admin/companies/{{company_id}}" }
+        },
+        {
+          "name": "Approve Company",
+          "request": { "method": "POST", "header": [], "body": { "mode": "raw", "raw": "" }, "url": "{{base_url}}/api/v1/admin/companies/{{company_id}}/approve" }
+        },
+        {
+          "name": "Reject Company",
+          "request": {
+            "method": "POST",
+            "header": [],
+            "body": {
+              "mode": "raw",
+              "options": { "raw": { "language": "json" } },
+              "raw": "{\n  \"reason\": \"Duplicate registration.\"\n}"
+            },
+            "url": "{{base_url}}/api/v1/admin/companies/{{company_id}}/reject",
+            "description": "Only valid while the company is pending_approval."
+          }
+        },
+        {
+          "name": "Suspend Company",
+          "request": {
+            "method": "POST",
+            "header": [],
+            "body": {
+              "mode": "raw",
+              "options": { "raw": { "language": "json" } },
+              "raw": "{\n  \"reason\": \"Policy violation.\"\n}"
+            },
+            "url": "{{base_url}}/api/v1/admin/companies/{{company_id}}/suspend"
+          }
+        },
+        {
+          "name": "Delete Company",
+          "request": { "method": "DELETE", "header": [], "url": "{{base_url}}/api/v1/admin/companies/{{company_id}}" }
+        },
+        {
+          "name": "List Users",
+          "request": {
+            "method": "GET",
+            "header": [],
+            "url": {
+              "raw": "{{base_url}}/api/v1/admin/users?limit=50&offset=0",
+              "host": ["{{base_url}}"],
+              "path": ["api", "v1", "admin", "users"],
+              "query": [
+                { "key": "company_id", "value": "{{company_id}}", "description": "Optional filter", "disabled": true },
+                { "key": "status", "value": "active", "description": "Optional. Options: pending | active | suspended", "disabled": true },
+                { "key": "is_super_admin", "value": "false", "description": "Optional. true | false", "disabled": true },
+                { "key": "limit", "value": "50", "description": "1-200" },
+                { "key": "offset", "value": "0" }
+              ]
+            }
+          }
+        },
+        {
+          "name": "Get User Detail",
+          "request": { "method": "GET", "header": [], "url": "{{base_url}}/api/v1/admin/users/{{existing_user_id}}" }
+        },
+        {
+          "name": "Get KPIs",
+          "request": { "method": "GET", "header": [], "url": "{{base_url}}/api/v1/admin/kpis" }
+        }
+      ]
+    },
+    {
+      "name": "Audit (Super Admin only)",
+      "item": [
+        {
+          "name": "List Audit Logs",
+          "request": {
+            "method": "GET",
+            "header": [],
+            "url": {
+              "raw": "{{base_url}}/api/v1/audit/logs?limit=50&offset=0",
+              "host": ["{{base_url}}"],
+              "path": ["api", "v1", "audit", "logs"],
+              "query": [
+                { "key": "action", "value": "auth.login.success", "description": "Optional exact match, e.g. product.created, creative_concept.approved", "disabled": true },
+                { "key": "actor_user_id", "value": "", "description": "Optional", "disabled": true },
+                { "key": "company_id", "value": "{{company_id}}", "description": "Optional", "disabled": true },
+                { "key": "product_id", "value": "{{product_id}}", "description": "Optional", "disabled": true },
+                { "key": "resource_type", "value": "", "description": "Optional, e.g. product, creative_concept, company_member", "disabled": true },
+                { "key": "from_date", "value": "", "description": "Optional ISO-8601 datetime", "disabled": true },
+                { "key": "to_date", "value": "", "description": "Optional ISO-8601 datetime", "disabled": true },
+                { "key": "limit", "value": "50", "description": "1-200" },
+                { "key": "offset", "value": "0" }
+              ]
+            }
+          },
+          "event": [
+            {
+              "listen": "test",
+              "script": {
+                "type": "text/javascript",
+                "exec": [
+                  "if (pm.response.code === 200) {",
+                  "    const body = pm.response.json();",
+                  "    if (body.items && body.items.length) pm.collectionVariables.set('log_id', body.items[0].id);",
+                  "}"
+                ]
+              }
+            }
+          ]
+        },
+        {
+          "name": "Get Audit Log",
+          "request": { "method": "GET", "header": [], "url": "{{base_url}}/api/v1/audit/logs/{{log_id}}" }
+        }
+      ]
+    }
+  ]
+}
