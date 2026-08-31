@@ -32,7 +32,12 @@ _QUALITY_DIRECTIVES = (
     "premium brand -- not an amateur or generic AI-generated graphic.\n"
     "Reflect current Instagram creative design trends: confident modern typography, "
     "deliberate use of whitespace, and contemporary layout conventions -- not a dated "
-    "stock-template look."
+    "stock-template look.\n"
+    "If this image depicts a human model, they must be an Indian model with authentic "
+    "Indian features, skin tone, and styling -- not a generic/Western default -- dressed "
+    "in attire appropriate to this specific post's context and occasion (e.g. formal wear "
+    "for professional/finance topics, festive/ethnic wear for festival posts, casual wear "
+    "for everyday lifestyle content, athleisure for fitness content)."
 )
 
 
