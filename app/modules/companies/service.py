@@ -377,6 +377,7 @@ class CompanyService:
             company_id=company_id,
             onboarding_step=company.onboarding_step,
             brand_structure=company.brand_structure,
+            group_website_url=company.group_website_url,
             products_count=products_count,
             sub_products_count=sub_products_count,
             social_accounts_count=social_accounts_count,

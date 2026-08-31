@@ -118,6 +118,8 @@ class CreativeFormat(StrEnum):
     post = "post"
     carousel = "carousel"
     reel = "reel"
+    story = "story"
+    video = "video"
 
 
 class CreativeLanguage(StrEnum):

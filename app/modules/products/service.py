@@ -1,4 +1,6 @@
-from sqlalchemy import func, select
+from typing import Any
+
+from sqlalchemy import UnaryExpression, func, select
 from sqlalchemy.ext.asyncio import AsyncSession
 
 from app.core.exceptions import BadRequestError, ConflictError, NotFoundError
@@ -27,6 +29,7 @@ from app.modules.companies.provisioning import find_or_create_user_by_email
 from app.modules.email.base import EmailService
 from app.modules.products.schemas import (
     AddProductMemberRequest,
+    ConceptSummary,
     CreateProductRequest,
     DashboardSummary,
     InviteProductMemberRequest,
@@ -373,13 +376,78 @@ class ProductService:
             status: count for status, count in social_status_rows
         }
 
+        drafts = concept_counts.get(ContentStatus.draft, 0)
+        pending_approvals = concept_counts.get(ContentStatus.in_review, 0)
+        scheduled = concept_counts.get(ContentStatus.scheduled, 0)
+        social_accounts_total = sum(social_status_counts.values())
+
+        async def _concepts(
+            *, status_filter: ContentStatus, order_by: UnaryExpression[Any], limit: int = 5
+        ) -> list[ConceptSummary]:
+            rows = (
+                await self._session.scalars(
+                    select(CreativeConcept)
+                    .join(GenerationJob, GenerationJob.id == CreativeConcept.job_id)
+                    .where(
+                        GenerationJob.product_id == product_id,
+                        CreativeConcept.deleted_at.is_(None),
+                        CreativeConcept.status == status_filter,
+                    )
+                    .order_by(order_by)
+                    .limit(limit)
+                )
+            ).all()
+            return [ConceptSummary.model_validate(row) for row in rows]
+
+        recent_rows = (
+            await self._session.scalars(
+                select(CreativeConcept)
+                .join(GenerationJob, GenerationJob.id == CreativeConcept.job_id)
+                .where(GenerationJob.product_id == product_id, CreativeConcept.deleted_at.is_(None))
+                .order_by(CreativeConcept.updated_at.desc())
+                .limit(5)
+            )
+        ).all()
+        recent_content = [ConceptSummary.model_validate(row) for row in recent_rows]
+
+        pending_approvals_list = await _concepts(
+            status_filter=ContentStatus.in_review, order_by=CreativeConcept.updated_at.asc()
+        )
+        upcoming_scheduled = await _concepts(
+            status_filter=ContentStatus.scheduled, order_by=CreativeConcept.scheduled_at.asc()
+        )
+        top_performing = await _concepts(
+            status_filter=ContentStatus.published, order_by=CreativeConcept.published_at.desc()
+        )
+
+        ai_recommendations: list[str] = []
+        if drafts:
+            noun = "draft" if drafts == 1 else "drafts"
+            ai_recommendations.append(f"{drafts} {noun} waiting to be submitted.")
+        if pending_approvals:
+            noun = "approval" if pending_approvals == 1 else "approvals"
+            ai_recommendations.append(f"{pending_approvals} {noun} need your review.")
+        if social_accounts_total == 0:
+            ai_recommendations.append("Connect a social account to start publishing.")
+        if not top_performing:
+            ai_recommendations.append("Nothing published yet -- schedule your first post.")
+        else:
+            latest_published = top_performing[0].published_at
+            if latest_published and (utcnow() - latest_published).days >= 7:
+                ai_recommendations.append("No content published in the last 7 days.")
+
         return DashboardSummary(
             product_id=product_id,
-            drafts=concept_counts.get(ContentStatus.draft, 0),
-            pending_approvals=concept_counts.get(ContentStatus.in_review, 0),
-            scheduled=concept_counts.get(ContentStatus.scheduled, 0),
+            drafts=drafts,
+            pending_approvals=pending_approvals,
+            scheduled=scheduled,
             published=concept_counts.get(ContentStatus.published, 0),
             failed_jobs=failed_jobs,
-            social_accounts_total=sum(social_status_counts.values()),
+            social_accounts_total=social_accounts_total,
             social_accounts_active=social_status_counts.get(SocialAccountStatus.active, 0),
+            recent_content=recent_content,
+            pending_approvals_list=pending_approvals_list,
+            upcoming_scheduled=upcoming_scheduled,
+            top_performing=top_performing,
+            ai_recommendations=ai_recommendations,
         )

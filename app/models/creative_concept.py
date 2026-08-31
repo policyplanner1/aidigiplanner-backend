@@ -53,3 +53,7 @@ class CreativeConcept(UUIDPKMixin, TimestampMixin, SoftDeleteMixin, Base):
     reviewed_at: Mapped[datetime | None] = mapped_column(TIMESTAMP_TYPE, nullable=True)
     scheduled_at: Mapped[datetime | None] = mapped_column(TIMESTAMP_TYPE, nullable=True)
     published_at: Mapped[datetime | None] = mapped_column(TIMESTAMP_TYPE, nullable=True)
+    # Phase 18/21's "suggested posting time" / "let AI choose the best time"
+    # -- a deterministic heuristic computed once at ideation (see
+    # app.modules.creatives.posting_time), not real engagement data.
+    suggested_posting_time: Mapped[datetime | None] = mapped_column(TIMESTAMP_TYPE, nullable=True)

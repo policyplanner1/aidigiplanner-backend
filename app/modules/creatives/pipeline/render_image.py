@@ -16,7 +16,12 @@ from __future__ import annotations
 
 from app.models.enums import CreativeAssetKind, CreativeFormat, CreativeQuality
 from app.modules.creatives.brand import BrandProfileDTO
-from app.modules.creatives.domain import ASPECT_RATIO_BY_FORMAT, GeneratedConcept, OnImageText
+from app.modules.creatives.domain import (
+    ASPECT_RATIO_BY_FORMAT,
+    REEL_LIKE_FORMATS,
+    GeneratedConcept,
+    OnImageText,
+)
 from app.modules.creatives.pipeline.postprocess import compose_final_image
 from app.modules.creatives.pipeline.types import RenderedAsset
 from app.modules.creatives.pricing import IMAGE_RESOLUTION_BY_QUALITY
@@ -75,9 +80,10 @@ def render_post_or_cover(
         logo_bytes=logo_bytes,
         debug_safezone=debug_safezone,
     )
-    # A reel's cover image is also its video's first frame -- label it
-    # accordingly so it doesn't read as an unrelated static post output.
-    label = "cover" if format is CreativeFormat.reel else "post"
+    # A reel's (or video's) cover image is also its video's first frame --
+    # label it accordingly so it doesn't read as an unrelated static post
+    # output.
+    label = "cover" if format in REEL_LIKE_FORMATS else "post"
     return RenderedAsset(
         kind=CreativeAssetKind.image,
         concept_index=concept_index,

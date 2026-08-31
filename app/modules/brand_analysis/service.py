@@ -51,6 +51,7 @@ class BrandAnalysisService:
             payload.description,
             settings=settings,
             dry_run=payload.dry_run,
+            website_url=payload.website_url,
         )
 
         profile = await get_own_brand_profile(self._session, scope, owner_id)

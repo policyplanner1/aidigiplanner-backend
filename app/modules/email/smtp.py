@@ -48,9 +48,9 @@ class SmtpEmailService(EmailService):
         settings = get_settings()
         await self._send(
             to_email=to_email,
-            subject="Verify your email — aiDigiPlanner",
+            subject="Verify your email — AI Social Planner",
             body=(
-                "Welcome to aiDigiPlanner!\n\n"
+                "Welcome to AI Social Planner!\n\n"
                 f"Your verification code is:\n\n{otp}\n\n"
                 f"Enter this code to continue. It expires in "
                 f"{settings.email_verification_otp_ttl_minutes} minutes and can only be "
@@ -63,9 +63,9 @@ class SmtpEmailService(EmailService):
         settings = get_settings()
         await self._send(
             to_email=to_email,
-            subject="Your password reset code — aiDigiPlanner",
+            subject="Your password reset code — AI Social Planner",
             body=(
-                "We received a request to reset your aiDigiPlanner password.\n\n"
+                "We received a request to reset your AI Social Planner password.\n\n"
                 f"Your verification code is:\n\n{otp}\n\n"
                 f"Enter this code to continue. It expires in {settings.otp_ttl_minutes} "
                 "minutes and can only be used once. If you didn't request this, "
@@ -78,9 +78,9 @@ class SmtpEmailService(EmailService):
     ) -> None:
         await self._send(
             to_email=to_email,
-            subject=f"You've been added to {company_name} on aiDigiPlanner",
+            subject=f"You've been added to {company_name} on AI Social Planner",
             body=(
-                f"You've been added as a member of {company_name} on aiDigiPlanner.\n\n"
+                f"You've been added as a member of {company_name} on AI Social Planner.\n\n"
                 f"Email: {to_email}\n"
                 f"Temporary password: {temporary_password}\n\n"
                 "Please log in and change your password as soon as possible."
@@ -90,10 +90,10 @@ class SmtpEmailService(EmailService):
     async def send_company_approved_email(self, *, to_email: str, company_name: str) -> None:
         await self._send(
             to_email=to_email,
-            subject=f"{company_name} has been approved — aiDigiPlanner",
+            subject=f"{company_name} has been approved — AI Social Planner",
             body=(
                 f"Good news — {company_name} has been reviewed and approved.\n\n"
-                "You can now log in and start using aiDigiPlanner."
+                "You can now log in and start using AI Social Planner."
             ),
         )
 
@@ -102,9 +102,9 @@ class SmtpEmailService(EmailService):
     ) -> None:
         await self._send(
             to_email=to_email,
-            subject=f"{company_name} registration was not approved — aiDigiPlanner",
+            subject=f"{company_name} registration was not approved — AI Social Planner",
             body=(
-                f"Your registration for {company_name} on aiDigiPlanner was not "
+                f"Your registration for {company_name} on AI Social Planner was not "
                 "approved.\n\n"
                 f"Reason: {reason}\n\n"
                 "If you believe this is a mistake, please contact support."
@@ -116,9 +116,9 @@ class SmtpEmailService(EmailService):
     ) -> None:
         await self._send(
             to_email=to_email,
-            subject=f"{company_name} has been suspended — aiDigiPlanner",
+            subject=f"{company_name} has been suspended — AI Social Planner",
             body=(
-                f"{company_name} has been suspended on aiDigiPlanner.\n\n"
+                f"{company_name} has been suspended on AI Social Planner.\n\n"
                 f"Reason: {reason}\n\n"
                 "Members of this company will not be able to log in until it is "
                 "reinstated. If you believe this is a mistake, please contact support."
@@ -128,9 +128,9 @@ class SmtpEmailService(EmailService):
     async def send_company_deleted_email(self, *, to_email: str, company_name: str) -> None:
         await self._send(
             to_email=to_email,
-            subject=f"{company_name} has been removed — aiDigiPlanner",
+            subject=f"{company_name} has been removed — AI Social Planner",
             body=(
-                f"{company_name} has been removed from aiDigiPlanner by a Super Admin.\n\n"
+                f"{company_name} has been removed from AI Social Planner by a Super Admin.\n\n"
                 "Members of this company will no longer be able to log in. If you "
                 "believe this is a mistake, please contact support."
             ),

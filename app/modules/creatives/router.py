@@ -174,7 +174,11 @@ async def schedule_creative_concept(
     service: CreativeServiceDep,
 ) -> CreativeConceptPublic:
     concept = await service.schedule_concept(
-        product_id, concept_id, current_user, payload.scheduled_at
+        product_id,
+        concept_id,
+        current_user,
+        scheduled_at=payload.scheduled_at,
+        use_suggested_time=payload.use_suggested_time,
     )
     return CreativeConceptPublic.model_validate(concept)
 

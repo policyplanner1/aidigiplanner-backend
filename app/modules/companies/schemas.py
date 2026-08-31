@@ -65,6 +65,7 @@ class OnboardingStatus(BaseModel):
     company_id: str
     onboarding_step: CompanyOnboardingStep
     brand_structure: CompanyBrandStructure | None
+    group_website_url: str | None
     products_count: int
     sub_products_count: int
     social_accounts_count: int

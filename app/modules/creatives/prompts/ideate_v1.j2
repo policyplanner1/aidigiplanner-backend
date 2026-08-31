@@ -43,7 +43,7 @@ Topic/angle brief: {{ brief.topic }}
 Format: {{ brief.format.value }} ({{ brief.aspect_ratio }})
 {% if brief.format.value == 'carousel' %}Carousel slides: {{ brief.carousel_slides }}
 {% endif -%}
-{% if brief.format.value == 'reel' %}Reel duration: {{ brief.reel_duration_s }}s, voiceover: {{ brief.voiceover.value if brief.voiceover else 'silent_text' }}
+{% if brief.format.value in ['reel', 'video'] %}Reel duration: {{ brief.reel_duration_s }}s, voiceover: {{ brief.voiceover.value if brief.voiceover else 'silent_text' }}
 {% endif -%}
 Language: {{ brief.language.value }}
 Quality tier: {{ brief.quality.value }}
@@ -59,7 +59,7 @@ WRITING PRINCIPLES
 {% if brief.format.value == 'carousel' %}
 - This is a CAROUSEL with {{ brief.carousel_slides }} slides -- also populate `carousel_slides` with exactly {{ brief.carousel_slides }} entries, one per slide, telling a connected story arc across the set (e.g. hook -> explain -> resolve/CTA, or myth -> fact -> takeaway). Each entry needs its own `visual_prompt` (what's visually different about THIS slide -- same palette/typography/style as the others, different subject/icon/focus) and its own short `headline`/`subhead` carrying that slide's specific point -- do not repeat the same headline on every slide. `image_prompt`/`on_image_text` at the top level should describe slide 1 specifically; `carousel_slides` is what actually drives every rendered slide.
 {% endif %}
-{% if brief.format.value == 'reel' %}
+{% if brief.format.value in ['reel', 'video'] %}
 - This is a REEL -- populate `reel` with 2-4 scenes forming a connected narrative arc (hook -> build -> payoff). Each scene needs its own `visual_prompt`, `vo_line` (the spoken line, only if voiceover is native_audio -- leave empty for silent_text), `duration_s` (1-8 seconds), and `on_screen_text` (a short caption burned into that scene -- especially important when voiceover is silent_text, since there's no audio to carry the point).
 {% if brief.reel_style and brief.reel_style.value == 'avatar' %}
 - AVATAR MODE: every scene will be rendered around a fixed spokesperson/avatar face already on file. Write each scene's `visual_prompt` as camera framing, expression, and gesture of that person speaking to camera about this scene's beat (e.g. "medium close-up, confident expression, gesturing while explaining the hook") -- never generic b-roll, product-only shots, or any framing without the person in frame.

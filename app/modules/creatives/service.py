@@ -466,13 +466,27 @@ class CreativeService:
         return concept
 
     async def schedule_concept(
-        self, product_id: str, concept_id: str, actor: User, scheduled_at: datetime
+        self,
+        product_id: str,
+        concept_id: str,
+        actor: User,
+        *,
+        scheduled_at: datetime | None = None,
+        use_suggested_time: bool = False,
     ) -> CreativeConcept:
         concept = await self._get_concept(product_id, concept_id)
         if concept.status != ContentStatus.approved:
             raise BadRequestError("Only an approved concept can be scheduled.")
+        if use_suggested_time:
+            if concept.suggested_posting_time is None:
+                raise BadRequestError("No suggested posting time is available for this concept.")
+            resolved_at = concept.suggested_posting_time
+        elif scheduled_at is not None:
+            resolved_at = scheduled_at
+        else:
+            raise BadRequestError("scheduled_at is required unless use_suggested_time is set.")
         concept.status = ContentStatus.scheduled
-        concept.scheduled_at = scheduled_at
+        concept.scheduled_at = resolved_at
         concept.reviewed_by = actor.id
         concept.reviewed_at = utcnow()
         await self._audit.log(

@@ -20,6 +20,7 @@ from PIL import Image, ImageDraw
 from app.models.enums import CreativeFormat, CreativeQuality, VoiceoverMode
 from app.modules.creatives.brand import BrandProfileDTO
 from app.modules.creatives.domain import (
+    REEL_LIKE_FORMATS,
     Angle,
     Brief,
     CarouselSlide,
@@ -92,7 +93,7 @@ class MockLLMProvider(LLMProvider):
                     for s in range(slide_count)
                 ]
             reel = None
-            if brief.format is CreativeFormat.reel:
+            if brief.format in REEL_LIKE_FORMATS:
                 scene_count = 3
                 per_scene = max(1, min(8, (brief.reel_duration_s or 8) // scene_count))
                 reel = ReelScript(

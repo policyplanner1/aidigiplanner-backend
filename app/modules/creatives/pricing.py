@@ -28,6 +28,7 @@ from pydantic_settings import BaseSettings, SettingsConfigDict
 from app.models.enums import CreativeFormat, CreativeQuality
 from app.modules.creatives.domain import (
     ASPECT_RATIO_BY_FORMAT,
+    REEL_LIKE_FORMATS,
     Brief,
     CostEstimate,
     CostLineItem,
@@ -213,7 +214,7 @@ def estimate_brief_cost(brief: Brief, settings: CreativeSettings) -> CostEstimat
         )
     )
 
-    if brief.format is CreativeFormat.reel:
+    if brief.format in REEL_LIKE_FORMATS:
         backend = video_backend_for(brief.voiceover)
         video_model = models.video_veo if backend == "veo" else models.video_omni
         resolution_v = VIDEO_RESOLUTION_BY_QUALITY[brief.quality]

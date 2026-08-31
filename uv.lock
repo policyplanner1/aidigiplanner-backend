@@ -20,6 +20,7 @@ dependencies = [
     { name = "fastapi" },
     { name = "ffmpeg-python" },
     { name = "google-genai" },
+    { name = "httpx" },
     { name = "jinja2" },
     { name = "pillow" },
     { name = "pydantic" },
@@ -35,7 +36,6 @@ dependencies = [
 
 [package.dev-dependencies]
 dev = [
-    { name = "httpx" },
     { name = "mypy" },
     { name = "pytest" },
     { name = "pytest-asyncio" },
@@ -52,6 +52,7 @@ requires-dist = [
     { name = "fastapi", specifier = ">=0.115" },
     { name = "ffmpeg-python", specifier = ">=0.2" },
     { name = "google-genai", specifier = ">=2.17,<3" },
+    { name = "httpx", specifier = ">=0.27" },
     { name = "jinja2", specifier = ">=3.1.4" },
     { name = "pillow", specifier = ">=10.4" },
     { name = "pydantic", specifier = ">=2.9" },
@@ -67,7 +68,6 @@ requires-dist = [
 
 [package.metadata.requires-dev]
 dev = [
-    { name = "httpx", specifier = ">=0.27" },
     { name = "mypy", specifier = ">=1.11" },
     { name = "pytest", specifier = ">=8.3" },
     { name = "pytest-asyncio", specifier = ">=0.24" },

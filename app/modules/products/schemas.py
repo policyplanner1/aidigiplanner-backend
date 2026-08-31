@@ -1,7 +1,13 @@
 from pydantic import BaseModel, ConfigDict, EmailStr, Field
 
 from app.core.schema_types import UTCDatetime
-from app.models.enums import ContentApprovalPolicy, ProductBrandingMode, ProductRole, ProductStatus
+from app.models.enums import (
+    ContentApprovalPolicy,
+    ContentStatus,
+    ProductBrandingMode,
+    ProductRole,
+    ProductStatus,
+)
 
 
 class ProductPublic(BaseModel):
@@ -55,6 +61,21 @@ class AddProductMemberRequest(BaseModel):
     sub_product_ids: list[str] = Field(default_factory=list)
 
 
+class ConceptSummary(BaseModel):
+    """A lightweight row for the dashboard's content lists -- not the full
+    CreativeConceptPublic (no caption/hashtags/assets), just enough to link
+    out to the concept from the dashboard."""
+
+    model_config = ConfigDict(from_attributes=True)
+
+    id: str
+    hook: str
+    status: ContentStatus
+    scheduled_at: UTCDatetime | None
+    published_at: UTCDatetime | None
+    updated_at: UTCDatetime
+
+
 class DashboardSummary(BaseModel):
     """Phase 13's dashboard cards."""
 
@@ -66,6 +87,15 @@ class DashboardSummary(BaseModel):
     failed_jobs: int
     social_accounts_total: int
     social_accounts_active: int
+    # Phase 13's dashboard sections. top_performing is "most recently
+    # published" (this backend has no engagement/analytics tracking at all
+    # -- publishing is state-only, see CreativeService.publish_concept) --
+    # labeled honestly rather than faking engagement numbers.
+    recent_content: list[ConceptSummary] = Field(default_factory=list)
+    pending_approvals_list: list[ConceptSummary] = Field(default_factory=list)
+    upcoming_scheduled: list[ConceptSummary] = Field(default_factory=list)
+    top_performing: list[ConceptSummary] = Field(default_factory=list)
+    ai_recommendations: list[str] = Field(default_factory=list)
 
 
 class InviteProductMemberRequest(BaseModel):

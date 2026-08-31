@@ -3,6 +3,7 @@ from typing import Any
 
 import structlog
 from arq.connections import RedisSettings
+from arq.worker import func
 from sqlalchemy import select
 from sqlalchemy.ext.asyncio import AsyncSession
 
@@ -14,12 +15,13 @@ from app.models.brand_profile import BrandProfile
 from app.models.creative_asset import CreativeAsset
 from app.models.creative_brief import CreativeBrief
 from app.models.creative_concept import CreativeConcept
-from app.models.enums import CreativeFormat, GenerationJobStatus, ReelStyle
+from app.models.enums import GenerationJobStatus, ReelStyle
 from app.models.generation_job import GenerationJob
 from app.modules.audit.service import AuditService
 from app.modules.brand_profiles.resolution import resolve_effective_brand_profile
 from app.modules.creatives.brand import BrandProfileDTO, brand_profile_from_row
 from app.modules.creatives.domain import (
+    REEL_LIKE_FORMATS,
     Angle,
     Brief,
     CarouselSlide,
@@ -33,6 +35,7 @@ from app.modules.creatives.pipeline.ideate import run_ideation
 from app.modules.creatives.pipeline.render_image import render_images_for_concepts
 from app.modules.creatives.pipeline.render_video import render_reel_clips_for_concepts
 from app.modules.creatives.pipeline.types import RenderedAsset
+from app.modules.creatives.posting_time import suggest_posting_time
 from app.modules.creatives.pricing import get_creative_settings
 from app.modules.creatives.providers.factory import (
     get_image_provider,
@@ -190,6 +193,7 @@ async def _run_ideation(session: AsyncSession, job_id: str, storage: StorageServ
         # Persisted in original generation order (not split by
         # accepted/rejected) -- compliance-rejected concepts are stored too,
         # with their reason, never silently dropped.
+        suggested_time = suggest_posting_time(brief_row.platforms, utcnow())
         for idx, concept in enumerate(ideation.concepts):
             session.add(
                 CreativeConcept(
@@ -215,10 +219,11 @@ async def _run_ideation(session: AsyncSession, job_id: str, storage: StorageServ
                     compliance_notes=concept.compliance_notes,
                     compliance_rejected=concept.rejected,
                     compliance_rejection_reason=concept.rejection_reason,
+                    suggested_posting_time=suggested_time,
                 )
             )
 
-        if brief.format is CreativeFormat.reel:
+        if brief.format in REEL_LIKE_FORMATS:
             job.status = GenerationJobStatus.awaiting_render
             await audit.log(
                 action="creative_job.awaiting_render",
@@ -234,6 +239,23 @@ async def _run_ideation(session: AsyncSession, job_id: str, storage: StorageServ
             return
 
         await session.commit()
+    except asyncio.CancelledError:
+        # arq force-cancels a task once it exceeds WorkerSettings' job_timeout
+        # (see the func() timeout overrides below) by raising CancelledError
+        # *inside* this coroutine -- a BaseException, not an Exception, so it
+        # would silently skip the `except Exception` branch below and leave
+        # the job stuck at `running` forever with no error if not handled
+        # here explicitly. Record the timeout, then re-raise so the task
+        # still completes its cancellation as arq expects.
+        await session.rollback()
+        job = await session.get(GenerationJob, job_id)
+        if job is not None:
+            job.status = GenerationJobStatus.failed
+            job.error_message = "Generation timed out."
+            job.finished_at = utcnow()
+            await session.commit()
+        logger.error("generation_job.timed_out", job_id=job_id, stage="ideation")
+        raise
     except Exception as exc:
         await session.rollback()
         job = await session.get(GenerationJob, job_id)
@@ -333,7 +355,7 @@ async def _run_asset_rendering(session: AsyncSession, job_id: str, storage: Stor
         # cover as the scene reference; avatar reels use the one shared
         # brand-profile avatar image for every concept instead (validated
         # to exist at request time -- see CreativeService.request_generation).
-        if brief.format is CreativeFormat.reel and indexed_accepted:
+        if brief.format in REEL_LIKE_FORMATS and indexed_accepted:
             reel_concepts = [(idx, c) for idx, c in indexed_accepted if c.reel is not None]
         else:
             reel_concepts = []
@@ -432,6 +454,24 @@ async def _run_asset_rendering(session: AsyncSession, job_id: str, storage: Stor
             rejected=rejected_count,
             assets=len(rendered_assets),
         )
+    except asyncio.CancelledError:
+        # See _run_ideation's matching handler -- arq's job_timeout cancels
+        # this coroutine via CancelledError (a BaseException, invisible to
+        # `except Exception` below), which would otherwise leave the job
+        # stuck at `running` forever with no error. Record the timeout
+        # (degraded, not empty, if any assets rendered before the cutoff)
+        # and re-raise so the task still completes its cancellation.
+        await session.rollback()
+        job = await session.get(GenerationJob, job_id)
+        if job is not None:
+            job.status = (
+                GenerationJobStatus.partially_failed if rendered_assets else GenerationJobStatus.failed
+            )
+            job.error_message = "Rendering timed out."
+            job.finished_at = utcnow()
+            await session.commit()
+        logger.error("generation_job.timed_out", job_id=job_id, stage="asset_rendering")
+        raise
     except Exception as exc:
         # Discards any partial CreativeAsset adds from this phase only --
         # the concepts committed by _run_ideation are unaffected, since that
@@ -514,5 +554,14 @@ WORKER_FUNCTIONS = {
 class WorkerSettings:
     """Run with: uv run arq app.modules.creatives.worker.WorkerSettings"""
 
-    functions = [generate_creatives_job, render_creative_assets_job]
+    # arq's default job_timeout (300s) is enough for ideation (a single LLM
+    # call) but not for asset rendering -- a reel's per-scene Veo/Omni video
+    # generation plus ffmpeg assembly routinely runs past 5 minutes. A job
+    # that hits job_timeout gets force-cancelled by arq; see the
+    # `except asyncio.CancelledError` handlers in _run_ideation/
+    # _run_asset_rendering for what happens if that still occurs.
+    functions = [
+        func(generate_creatives_job, timeout=600),
+        func(render_creative_assets_job, timeout=1800),
+    ]
     redis_settings = RedisSettings.from_dsn(get_settings().redis_url)

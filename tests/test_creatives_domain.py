@@ -69,7 +69,7 @@ class TestBriefFormatValidation:
     def test_reel_duration_below_minimum_rejected(self) -> None:
         with pytest.raises(ValidationError):
             Brief(
-                product_line="health", topic="waiting periods", format="reel", reel_duration_s=5
+                product_line="health", topic="waiting periods", format="reel", reel_duration_s=3
             )
 
     def test_reel_duration_above_maximum_rejected(self) -> None:
@@ -79,7 +79,7 @@ class TestBriefFormatValidation:
             )
 
     def test_reel_duration_at_boundaries_accepted(self) -> None:
-        for duration in (8, 30):
+        for duration in (4, 30):
             b = Brief(
                 product_line="health",
                 topic="waiting periods",

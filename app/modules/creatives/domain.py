@@ -41,8 +41,13 @@ class Angle(StrEnum):
 
 
 # Veo 3.1's documented durationSeconds is one of "4"/"6"/"8" only. Longer
-# reels are assembled by stitching multiple <=8s scene clips.
-REEL_DURATION_MIN_S = 8
+# reels are assembled by stitching multiple <=8s scene clips. 4s is Veo's
+# actual floor -- a single-scene reel can't render shorter than that. The
+# default (unset reel_duration_s) stays at 8s -- unchanged from before this
+# floor was lowered, since that's a separate choice from "what's the
+# shortest a caller may explicitly request."
+REEL_DURATION_MIN_S = 4
+REEL_DURATION_DEFAULT_S = 8
 REEL_DURATION_MAX_S = 30
 VEO_CLIP_DURATION_CHOICES: tuple[int, ...] = (4, 6, 8)
 
@@ -50,7 +55,15 @@ ASPECT_RATIO_BY_FORMAT: dict[CreativeFormat, str] = {
     CreativeFormat.post: "4:5",
     CreativeFormat.carousel: "4:5",
     CreativeFormat.reel: "9:16",
+    CreativeFormat.story: "9:16",
+    CreativeFormat.video: "9:16",
 }
+
+# `video` is mechanically identical to `reel` throughout the pipeline (same
+# scene-script generation, same async render path) -- it exists as a
+# separate enum member only because Quick-Create's spec lists Reel and Video
+# as distinct user-facing choices.
+REEL_LIKE_FORMATS: tuple[CreativeFormat, ...] = (CreativeFormat.reel, CreativeFormat.video)
 
 CAROUSEL_SLIDE_RANGE: tuple[int, int] = (3, 8)
 
@@ -94,9 +107,9 @@ class Brief(BaseModel):
         if self.format is not CreativeFormat.carousel and self.carousel_slides is not None:
             raise ValueError("carousel_slides is only valid when format is 'carousel'")
 
-        if self.format is CreativeFormat.reel:
+        if self.format in REEL_LIKE_FORMATS:
             if self.reel_duration_s is None:
-                self.reel_duration_s = REEL_DURATION_MIN_S
+                self.reel_duration_s = REEL_DURATION_DEFAULT_S
             elif not (REEL_DURATION_MIN_S <= self.reel_duration_s <= REEL_DURATION_MAX_S):
                 raise ValueError(
                     f"reel_duration_s must be between {REEL_DURATION_MIN_S} and "
@@ -108,11 +121,11 @@ class Brief(BaseModel):
                 self.reel_style = ReelStyle.story
         else:
             if self.reel_duration_s is not None:
-                raise ValueError("reel_duration_s is only valid when format is 'reel'")
+                raise ValueError("reel_duration_s is only valid when format is 'reel' or 'video'")
             if self.voiceover is not None:
-                raise ValueError("voiceover is only valid when format is 'reel'")
+                raise ValueError("voiceover is only valid when format is 'reel' or 'video'")
             if self.reel_style is not None:
-                raise ValueError("reel_style is only valid when format is 'reel'")
+                raise ValueError("reel_style is only valid when format is 'reel' or 'video'")
         return self
 
     @property

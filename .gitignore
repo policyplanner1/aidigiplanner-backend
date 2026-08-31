@@ -29,3 +29,6 @@ storage/creatives/
 Thumbs.db
 .DS_Store
 *.log
+
+# Office lock files
+~$*

@@ -49,7 +49,7 @@ class Settings(BaseSettings):
     smtp_user: str = ""
     smtp_pass: str = ""
     smtp_use_tls: bool = True
-    smtp_from_name: str = "aiDigiPlanner"
+    smtp_from_name: str = "AI Social Planner"
 
     # Where CreativeAsset bytes (generated images/videos) live. "local"
     # is the only backend implemented so far; get_storage_service() raises

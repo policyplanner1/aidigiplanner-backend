@@ -22,7 +22,7 @@ class GenerateCreativesRequest(BaseModel):
     topic: str = Field(min_length=3, max_length=300)
     format: CreativeFormat
     carousel_slides: int | None = Field(default=None, ge=3, le=8)
-    reel_duration_s: int | None = Field(default=None, ge=8, le=30)
+    reel_duration_s: int | None = Field(default=None, ge=4, le=30)
     language: CreativeLanguage = CreativeLanguage.en
     concept_count: int = Field(default=3, ge=1, le=6)
     quality: CreativeQuality = CreativeQuality.standard
@@ -115,6 +115,7 @@ class CreativeConceptPublic(BaseModel):
     reviewed_at: UTCDatetime | None
     scheduled_at: UTCDatetime | None
     published_at: UTCDatetime | None
+    suggested_posting_time: UTCDatetime | None
     created_at: UTCDatetime
     updated_at: UTCDatetime
     # Not populated by model_validate(orm_row) (no ORM relationship exists
@@ -129,7 +130,11 @@ class RejectConceptRequest(BaseModel):
 
 
 class ScheduleConceptRequest(BaseModel):
-    scheduled_at: datetime
+    # Either an explicit time, or use_suggested_time=True to schedule at the
+    # concept's own suggested_posting_time (Phase 21's "let AI choose the
+    # best time" option) -- see CreativeService.schedule_concept.
+    scheduled_at: datetime | None = None
+    use_suggested_time: bool = False
 
 
 class ContentCommentPublic(BaseModel):

@@ -78,6 +78,7 @@ def create_interaction(
     input: str | list[dict[str, object]],
     response_format: dict[str, object],
     previous_interaction_id: str | None = None,
+    tools: list[dict[str, object]] | None = None,
 ) -> Interaction:
     logger.info(
         "gemini_request",
@@ -85,6 +86,7 @@ def create_interaction(
         response_format_type=response_format.get("type"),
         has_schema="schema" in response_format,
         previous_interaction_id=previous_interaction_id,
+        tools=tools,
         prompt=_describe_input(input),
     )
     start = time.monotonic()
@@ -93,15 +95,27 @@ def create_interaction(
         # an Interaction; mypy statically sees the pre-override generated
         # overload set instead, whose return type doesn't match at the type
         # level. cast() asserts the documented runtime behavior.
-        response = cast(
-            Interaction,
-            client.interactions.create(
-                model=model,
-                input=input,
-                response_format=response_format,
-                previous_interaction_id=previous_interaction_id,
-            ),
-        )
+        if tools:
+            response = cast(
+                Interaction,
+                client.interactions.create(
+                    model=model,
+                    input=input,
+                    response_format=response_format,
+                    previous_interaction_id=previous_interaction_id,
+                    tools=tools,
+                ),
+            )
+        else:
+            response = cast(
+                Interaction,
+                client.interactions.create(
+                    model=model,
+                    input=input,
+                    response_format=response_format,
+                    previous_interaction_id=previous_interaction_id,
+                ),
+            )
     except Exception as exc:
         logger.warning(
             "gemini_error",
