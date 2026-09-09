@@ -1,18 +1,20 @@
 import os
 from collections.abc import AsyncGenerator
 
-# Force every Gemini call in the test suite through the mock providers,
-# regardless of what a developer's real .env has configured for local
-# manual testing -- matches the documented intent ("Leave empty to use
+# Force every Gemini/HeyGen call in the test suite through the mock
+# providers, regardless of what a developer's real .env has configured for
+# local manual testing -- matches the documented intent ("Leave empty to use
 # deterministic mock providers everywhere ... this is what the test suite
 # does", see .env.example) and must run before any Settings/CreativeSettings
-# is ever constructed (both read GEMINI_API_KEY at instantiation time, and
-# get_creative_settings() is lru_cache'd for the life of the process).
+# is ever constructed (both read GEMINI_API_KEY/HEYGEN_API_KEY at
+# instantiation time, and get_creative_settings() is lru_cache'd for the
+# life of the process).
 # An actual OS env var (as set here) takes priority over the .env file in
 # pydantic-settings' resolution order, so this overrides a real key that's
 # only present in .env -- os.environ.pop alone would not (the .env file
 # would still supply it).
 os.environ["GEMINI_API_KEY"] = ""
+os.environ["HEYGEN_API_KEY"] = ""
 
 import pytest
 import pytest_asyncio

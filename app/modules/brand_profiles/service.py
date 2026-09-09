@@ -118,6 +118,12 @@ class BrandProfileService:
         await self._storage.save(key=key, data=data, content_type=content_type)
         setattr(profile, storage_key_attr, key)
         setattr(profile, mime_type_attr, content_type)
+        if slot == "avatar":
+            # A re-uploaded avatar photo invalidates any HeyGen Photo Avatar
+            # already registered for the old image -- avatar-style reels
+            # must re-register (and re-persist) a fresh one from the new
+            # photo rather than silently keep talking with the old face.
+            profile.heygen_avatar_id = None
 
         await self._audit.log(
             action=f"brand_profile.{slot.replace('-', '_')}_uploaded",

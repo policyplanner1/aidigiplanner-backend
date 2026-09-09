@@ -5,8 +5,8 @@ from typing import Any
 
 import pytest
 
-from app.models.enums import CreativeFormat, CreativeQuality, VoiceoverMode
-from app.modules.creatives.domain import Brief, video_backend_for
+from app.models.enums import CreativeFormat, CreativeQuality, ReelStyle, VoiceoverMode
+from app.modules.creatives.domain import Brief, video_backend_for, video_backend_for_reel
 from app.modules.creatives.pricing import (
     CostTable,
     CreativeSettings,
@@ -116,6 +116,20 @@ class TestVideoBackendFor:
         assert video_backend_for(None) == "omni"
 
 
+class TestVideoBackendForReel:
+    def test_avatar_style_always_maps_to_heygen(self) -> None:
+        assert video_backend_for_reel(VoiceoverMode.native_audio, ReelStyle.avatar) == "heygen"
+        assert video_backend_for_reel(VoiceoverMode.silent_text, ReelStyle.avatar) == "heygen"
+        assert video_backend_for_reel(None, ReelStyle.avatar) == "heygen"
+
+    def test_story_style_falls_through_to_voiceover_based_choice(self) -> None:
+        assert video_backend_for_reel(VoiceoverMode.native_audio, ReelStyle.story) == "veo"
+        assert video_backend_for_reel(VoiceoverMode.silent_text, ReelStyle.story) == "omni"
+
+    def test_none_reel_style_falls_through_to_voiceover_based_choice(self) -> None:
+        assert video_backend_for_reel(VoiceoverMode.native_audio, None) == "veo"
+
+
 class TestEstimateBriefCost:
     def test_post_has_ideation_review_and_image_lines_only(self) -> None:
         settings = CreativeSettings(_env_file=None)
@@ -163,6 +177,22 @@ class TestEstimateBriefCost:
             estimate_brief_cost(reel, settings).total_inr
             > estimate_brief_cost(post, settings).total_inr
         )
+
+    def test_avatar_reel_uses_heygen_backend_in_cost_line(self) -> None:
+        settings = CreativeSettings(_env_file=None)
+        brief = Brief(
+            product_line="travel",
+            topic="baggage loss",
+            format="reel",
+            reel_duration_s=16,
+            concept_count=1,
+            reel_style="avatar",
+        )
+        estimate = estimate_brief_cost(brief, settings)
+        video_items = [li for li in estimate.line_items if "video" in li.label.lower()]
+        assert len(video_items) == 1
+        assert "heygen" in video_items[0].label.lower()
+        assert video_items[0].subtotal_inr > 0
 
     def test_native_audio_reel_costs_more_than_silent(self) -> None:
         settings = CreativeSettings(_env_file=None)

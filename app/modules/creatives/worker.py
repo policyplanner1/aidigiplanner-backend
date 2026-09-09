@@ -28,7 +28,7 @@ from app.modules.creatives.domain import (
     GeneratedConcept,
     OnImageText,
     ReelScript,
-    video_backend_for,
+    video_backend_for_reel,
 )
 from app.modules.creatives.pipeline.assemble import assemble_reel
 from app.modules.creatives.pipeline.ideate import run_ideation
@@ -42,6 +42,7 @@ from app.modules.creatives.providers.factory import (
     get_llm_provider,
     get_video_provider,
 )
+from app.modules.creatives.providers.heygen_video import HeyGenAvatarProvider
 from app.modules.storage.base import StorageService
 from app.modules.storage.provider import get_storage_service
 
@@ -378,9 +379,18 @@ async def _run_asset_rendering(session: AsyncSession, job_id: str, storage: Stor
             # Brief's format-specific validator guarantees voiceover is set
             # whenever format is reel -- see domain.Brief._check_format_specific_fields.
             assert brief.voiceover is not None
-            backend = video_backend_for(brief.voiceover)
+            backend = video_backend_for_reel(brief.voiceover, brief.reel_style)
+            # A brand that already has a registered HeyGen avatar (or one
+            # seeded via HEYGEN_DEFAULT_AVATAR_ID) reuses it -- registering a
+            # new one costs real money, see HeyGenAvatarProvider's docstring.
+            heygen_known_avatar_id = (
+                brand_row.heygen_avatar_id or creative_settings.heygen_default_avatar_id or None
+            )
             video_provider = get_video_provider(
-                dry_run=job.dry_run, backend=backend, settings=creative_settings
+                dry_run=job.dry_run,
+                backend=backend,
+                settings=creative_settings,
+                heygen_known_avatar_id=heygen_known_avatar_id,
             )
 
             # Both the per-scene generation calls and the ffmpeg assembly
@@ -394,6 +404,16 @@ async def _run_asset_rendering(session: AsyncSession, job_id: str, storage: Stor
                 voiceover=brief.voiceover,
                 video_provider=video_provider,
             )
+            # If this job just registered a brand-new HeyGen avatar (no
+            # known_avatar_id was available going in), persist it so every
+            # later job for this brand reuses it instead of paying to
+            # register another one.
+            if (
+                isinstance(video_provider, HeyGenAvatarProvider)
+                and video_provider.avatar_id
+                and video_provider.avatar_id != brand_row.heygen_avatar_id
+            ):
+                brand_row.heygen_avatar_id = video_provider.avatar_id
             for asset in raw_clip_assets:
                 await _persist_asset(
                     session=session,

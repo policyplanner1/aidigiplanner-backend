@@ -115,10 +115,26 @@ class Brief(BaseModel):
                     f"reel_duration_s must be between {REEL_DURATION_MIN_S} and "
                     f"{REEL_DURATION_MAX_S} seconds"
                 )
-            if self.voiceover is None:
-                self.voiceover = VoiceoverMode.silent_text
             if self.reel_style is None:
                 self.reel_style = ReelStyle.story
+            if self.voiceover is None:
+                # Avatar reels need genuine spoken dialogue for the HeyGen
+                # talking-avatar backend to lip-sync -- silent_text would
+                # produce a face with nothing to say. Story reels keep the
+                # original silent/on-screen-text default.
+                self.voiceover = (
+                    VoiceoverMode.native_audio
+                    if self.reel_style is ReelStyle.avatar
+                    else VoiceoverMode.silent_text
+                )
+            elif (
+                self.reel_style is ReelStyle.avatar
+                and self.voiceover is VoiceoverMode.silent_text
+            ):
+                raise ValueError(
+                    "avatar reel_style requires native_audio voiceover -- "
+                    "a talking avatar has nothing to lip-sync without a script"
+                )
         else:
             if self.reel_duration_s is not None:
                 raise ValueError("reel_duration_s is only valid when format is 'reel' or 'video'")
@@ -250,3 +266,12 @@ def video_backend_for(voiceover: VoiceoverMode | None) -> str:
     carrying audio); silent on-screen-text reels default to the cheaper
     Omni Flash backend."""
     return "veo" if voiceover is VoiceoverMode.native_audio else "omni"
+
+
+def video_backend_for_reel(voiceover: VoiceoverMode | None, reel_style: ReelStyle | None) -> str:
+    """Like video_backend_for, but routes avatar-style reels to HeyGen
+    instead -- a genuine lip-synced talking avatar, not Veo/Omni b-roll
+    keyed off a reference image. Story reels are unaffected."""
+    if reel_style is ReelStyle.avatar:
+        return "heygen"
+    return video_backend_for(voiceover)

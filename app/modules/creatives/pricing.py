@@ -32,7 +32,7 @@ from app.modules.creatives.domain import (
     Brief,
     CostEstimate,
     CostLineItem,
-    video_backend_for,
+    video_backend_for_reel,
 )
 
 _DEFAULT_PROMPTS_DIR = str(Path(__file__).resolve().parent / "prompts")
@@ -90,6 +90,11 @@ class CostTable(BaseModel):
     video_veo_per_second_1080p: float = 0.40 * 88.0
     video_veo_per_second_4k: float = 0.60 * 88.0
     video_omni_per_second: float = 0.10 * 88.0
+    # HeyGen Avatar IV pay-as-you-go rate, ~$0.05-0.10/s depending on
+    # resolution -- see memory heygen_avatar_video_api.md for the source.
+    # Re-verify against https://www.heygen.com/api-pricing before relying on
+    # this for real budgeting.
+    video_heygen_per_second: float = 0.05 * 88.0
 
     def estimate_text_call_inr(
         self, quality: CreativeQuality, est_input_tokens: int, est_output_tokens: int
@@ -131,6 +136,8 @@ class CostTable(BaseModel):
             if rate is None:
                 raise ValueError(f"unknown veo resolution {resolution!r}")
             return duration_s * rate
+        if backend == "heygen":
+            return duration_s * self.video_heygen_per_second
         raise ValueError(f"unknown video backend {backend!r}")
 
 
@@ -215,8 +222,12 @@ def estimate_brief_cost(brief: Brief, settings: CreativeSettings) -> CostEstimat
     )
 
     if brief.format in REEL_LIKE_FORMATS:
-        backend = video_backend_for(brief.voiceover)
-        video_model = models.video_veo if backend == "veo" else models.video_omni
+        backend = video_backend_for_reel(brief.voiceover, brief.reel_style)
+        video_model = {
+            "veo": models.video_veo,
+            "omni": models.video_omni,
+            "heygen": "heygen-avatar-v2",
+        }[backend]
         resolution_v = VIDEO_RESOLUTION_BY_QUALITY[brief.quality]
         per_second = costs.estimate_video_call_inr(backend, 1, resolution_v)
         duration = brief.reel_duration_s or 0
@@ -240,6 +251,25 @@ class CreativeSettings(BaseSettings):
 
     # No CREATIVE_ prefix -- shared verbatim with any other Gemini caller.
     gemini_api_key: str = Field(default="", alias="GEMINI_API_KEY")
+
+    # HeyGen (talking-avatar video, ReelStyle.avatar reels). No CREATIVE_
+    # prefix either, for the same reason as GEMINI_API_KEY above. Targets
+    # HeyGen's v3 API (single host, no separate upload host) -- see memory
+    # heygen_avatar_video_api.md and heygen_video.py's module docstring for
+    # the reference this was built against.
+    heygen_api_key: str = Field(default="", alias="HEYGEN_API_KEY")
+    heygen_api_base_url: str = "https://api.heygen.com"
+    # voice_id from HeyGen's GET /v3/voices -- BrandProfile has no per-brand
+    # voice field today, so every avatar reel uses this one configured voice.
+    heygen_default_voice_id: str = Field(default="", alias="HEYGEN_DEFAULT_VOICE_ID")
+    # Fallback HeyGen avatar_id used only when a brand has no
+    # BrandProfile.heygen_avatar_id persisted yet (see worker.py) -- lets a
+    # pre-existing/manually-created HeyGen avatar be used immediately
+    # without waiting for the normal register-from-brand-photo flow to run
+    # (and pay to create one) first.
+    heygen_default_avatar_id: str = Field(default="", alias="HEYGEN_DEFAULT_AVATAR_ID")
+    heygen_poll_interval_s: float = 6.0
+    heygen_poll_timeout_s: float = 600.0
 
     prompts_dir: str = _DEFAULT_PROMPTS_DIR
 

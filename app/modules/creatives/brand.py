@@ -65,6 +65,10 @@ class BrandProfileDTO(BaseModel):
     # worker.py to fetch the bytes for ReelStyle.avatar generation.
     avatar_storage_key: str | None = None
     avatar_mime_type: str | None = None
+    # Persisted HeyGen Photo Avatar id for avatar_storage_key's image, if one
+    # has already been registered -- see worker.py's use of this to skip
+    # re-registering (and re-paying for) a HeyGen avatar every job.
+    heygen_avatar_id: str | None = None
     compliance: ComplianceProfile
     cta_bank: list[str] = Field(default_factory=list)
     hashtag_bank: list[str] = Field(default_factory=list)
@@ -94,6 +98,7 @@ def brand_profile_from_row(row: BrandProfileRow) -> BrandProfileDTO:
         logo_storage_key=row.logo_storage_key,
         avatar_storage_key=row.avatar_storage_key,
         avatar_mime_type=row.avatar_mime_type,
+        heygen_avatar_id=row.heygen_avatar_id,
         compliance=ComplianceProfile(
             mandatory_disclaimer=row.compliance_mandatory_disclaimer,
             secondary_disclaimers=row.compliance_secondary_disclaimers,

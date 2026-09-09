@@ -104,6 +104,30 @@ class TestBriefFormatValidation:
         )
         assert b.reel_style == "avatar"
 
+    def test_avatar_reel_style_defaults_voiceover_to_native_audio(self) -> None:
+        """A HeyGen talking avatar needs a script to speak -- unlike story
+        reels, avatar reels must not silently default to silent_text."""
+        b = Brief(
+            product_line="health", topic="waiting periods", format="reel", reel_style="avatar"
+        )
+        assert b.voiceover == "native_audio"
+
+    def test_avatar_reel_style_with_explicit_silent_text_rejected(self) -> None:
+        with pytest.raises(ValidationError):
+            Brief(
+                product_line="health",
+                topic="waiting periods",
+                format="reel",
+                reel_style="avatar",
+                voiceover="silent_text",
+            )
+
+    def test_story_reel_style_still_defaults_voiceover_to_silent_text(self) -> None:
+        b = Brief(
+            product_line="health", topic="waiting periods", format="reel", reel_style="story"
+        )
+        assert b.voiceover == "silent_text"
+
     def test_job_key_deterministic(self) -> None:
         b1 = Brief(product_line="travel", topic="Visa Cover", format="post")
         b2 = Brief(product_line="travel", topic="visa cover", format="post")
