@@ -37,3 +37,15 @@ class EmailService(ABC):
 
     @abstractmethod
     async def send_company_deleted_email(self, *, to_email: str, company_name: str) -> None: ...
+
+    @abstractmethod
+    async def send_demo_request(
+        self,
+        *,
+        to_email: str,
+        name: str,
+        work_email: str,
+        company: str,
+        message: str,
+        ip_address: str | None = None,
+    ) -> None: ...

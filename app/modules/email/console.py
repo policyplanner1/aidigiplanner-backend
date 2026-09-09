@@ -70,3 +70,23 @@ class ConsoleEmailService(EmailService):
             to=to_email,
             company_name=company_name,
         )
+
+    async def send_demo_request(
+        self,
+        *,
+        to_email: str,
+        name: str,
+        work_email: str,
+        company: str,
+        message: str,
+        ip_address: str | None = None,
+    ) -> None:
+        _logger.info(
+            "email.demo_request",
+            to=to_email,
+            name=name,
+            work_email=work_email,
+            company=company,
+            message=message,
+            ip_address=ip_address,
+        )

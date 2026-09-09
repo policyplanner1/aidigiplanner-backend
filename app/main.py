@@ -1,8 +1,10 @@
 from fastapi import FastAPI, Request
 from fastapi.encoders import jsonable_encoder
 from fastapi.exceptions import RequestValidationError
+from fastapi.middleware.cors import CORSMiddleware
 from fastapi.responses import JSONResponse
 
+from app.core.config import get_settings
 from app.core.exceptions import AppError
 from app.core.logging_setup import RequestIDMiddleware, configure_logging, get_logger
 from app.modules.admin.router import router as admin_router
@@ -13,6 +15,7 @@ from app.modules.brand_profiles.router import router as brand_profiles_router
 from app.modules.companies.router import router as companies_router
 from app.modules.creatives.router import router as creatives_router
 from app.modules.products.router import router as products_router
+from app.modules.public.router import router as public_router
 from app.modules.social_accounts.router import router as social_accounts_router
 from app.modules.sub_products.router import router as sub_products_router
 
@@ -24,6 +27,16 @@ def create_app() -> FastAPI:
     app = FastAPI(title="aidigiplanner-backend", version="0.1.0")
 
     app.add_middleware(RequestIDMiddleware)
+
+    frontend_url = get_settings().frontend_url.rstrip("/")
+    if frontend_url:
+        app.add_middleware(
+            CORSMiddleware,
+            allow_origins=[frontend_url],
+            allow_credentials=True,
+            allow_methods=["*"],
+            allow_headers=["*"],
+        )
 
     @app.exception_handler(AppError)
     async def handle_app_error(request: Request, exc: AppError) -> JSONResponse:
@@ -65,6 +78,7 @@ def create_app() -> FastAPI:
     async def health() -> dict[str, str]:
         return {"status": "ok"}
 
+    app.include_router(public_router)
     app.include_router(auth_router)
     app.include_router(companies_router)
     app.include_router(products_router)

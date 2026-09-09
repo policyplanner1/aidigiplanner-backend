@@ -62,6 +62,46 @@ class Settings(BaseSettings):
     # process consumes it -- see app/modules/creatives/worker.py.
     redis_url: str = "redis://127.0.0.1:6379/0"
 
+    # SPA origin. Used for CORS and for the post-OAuth redirect after a
+    # social account is connected (or the attempt fails).
+    frontend_url: str = ""
+
+    # Fallback OAuth broker for Instagram when META_APP_ID is not set
+    # (Auth0 → Meta → /auth/callback). Direct Meta login is preferred.
+    auth0_domain: str = ""
+    auth0_client_id: str = ""
+    auth0_client_secret: str = ""
+    auth0_callback_url: str = "http://localhost:8000/auth/callback"
+    # Auth0 social connection name. Instagram Graph usually needs the
+    # Facebook connection (`facebook`); a native `instagram` connection
+    # works if that's what is enabled in the Auth0 tenant.
+    auth0_instagram_connection: str = "facebook"
+    # Optional extra IdP scopes forwarded to Meta. Leave empty to use
+    # whatever is already configured on the Auth0 connection.
+    auth0_instagram_connection_scope: str = ""
+    # Direct Meta Facebook Login for Instagram / Facebook Page connect.
+    # When META_APP_ID and META_APP_SECRET are set, this path is used and
+    # Auth0 Management API is not required.
+    meta_app_id: str = ""
+    meta_app_secret: str = ""
+    meta_redirect_uri: str = "http://localhost:8000/api/social/instagram/callback"
+    meta_facebook_redirect_uri: str = "http://localhost:8000/api/social/facebook/callback"
+    meta_oauth_scope: str = "instagram_business_basic"
+    meta_facebook_oauth_scope: str = (
+        "pages_show_list,pages_read_engagement,pages_manage_posts,business_management"
+    )
+    # Optional Facebook Login for Business configuration id. When set, Meta
+    # shows the Page picker from that configuration instead of classic Login.
+    meta_login_config_id: str = ""
+
+    # Google OAuth client used to connect YouTube channels. Empty client_id
+    # disables the YouTube flow.
+    google_client_id: str = ""
+    google_client_secret: str = ""
+    google_redirect_uri: str = "http://localhost:8000/api/social/youtube/callback"
+    # Separate redirect so YouTube and Business Profile do not share a callback.
+    google_business_redirect_uri: str = "http://localhost:8000/api/social/google/callback"
+
 
 @lru_cache
 def get_settings() -> Settings:

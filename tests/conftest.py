@@ -35,9 +35,16 @@ from app.modules.creatives.brand import (
 from app.modules.creatives.queue import get_arq_pool
 from app.modules.email.base import EmailService
 from app.modules.email.provider import get_email_service
+from app.modules.social_accounts.oauth import SocialOAuthClient
+from app.modules.social_accounts.provider import get_social_oauth_client
 from app.modules.storage.base import StorageService
 from app.modules.storage.provider import get_storage_service
-from tests.fakes import FakeArqPool, InMemoryStorageService, RecordingEmailService
+from tests.fakes import (
+    FakeArqPool,
+    FakeSocialOAuthClient,
+    InMemoryStorageService,
+    RecordingEmailService,
+)
 
 settings = get_settings()
 
@@ -203,12 +210,18 @@ async def _reset_rate_limiter() -> None:
     limiter._hits.clear()  # type: ignore[attr-defined]
 
 
+@pytest.fixture
+def oauth_client() -> FakeSocialOAuthClient:
+    return FakeSocialOAuthClient()
+
+
 @pytest_asyncio.fixture
 async def client(
     db_session: AsyncSession,
     email_service: RecordingEmailService,
     arq_pool: FakeArqPool,
     storage_service: InMemoryStorageService,
+    oauth_client: FakeSocialOAuthClient,
 ) -> AsyncGenerator[AsyncClient, None]:
     async def _override_get_db_session() -> AsyncGenerator[AsyncSession, None]:
         yield db_session
@@ -222,10 +235,14 @@ async def client(
     def _override_get_storage_service() -> StorageService:
         return storage_service
 
+    def _override_get_social_oauth_client() -> SocialOAuthClient:
+        return oauth_client
+
     fastapi_app.dependency_overrides[get_db_session] = _override_get_db_session
     fastapi_app.dependency_overrides[get_email_service] = _override_get_email_service
     fastapi_app.dependency_overrides[get_arq_pool] = _override_get_arq_pool
     fastapi_app.dependency_overrides[get_storage_service] = _override_get_storage_service
+    fastapi_app.dependency_overrides[get_social_oauth_client] = _override_get_social_oauth_client
 
     transport = ASGITransport(app=fastapi_app)
     async with AsyncClient(transport=transport, base_url="http://test") as ac:

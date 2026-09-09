@@ -32,7 +32,7 @@ class SmtpEmailService(EmailService):
             smtp.login(settings.smtp_user, settings.smtp_pass)
             smtp.send_message(message)
 
-    async def _send(self, *, to_email: str, subject: str, body: str) -> None:
+    async def _send(self, *, to_email: str, subject: str, body: str, raise_on_error: bool = False) -> None:
         try:
             await asyncio.to_thread(self._send_sync, to_email=to_email, subject=subject, body=body)
             _logger.info("email.sent", to=to_email, subject=subject)
@@ -41,8 +41,11 @@ class SmtpEmailService(EmailService):
             # add-member, approve/reject) already committed. Log loudly
             # instead of failing the request — affected flows all have a
             # retry path (resend-verification, forgot-password, or the admin
-            # just re-adding the member).
+            # just re-adding the member). Public demo requests have no DB
+            # record, so those raise and the form can show an error.
             _logger.exception("email.send_failed", to=to_email, subject=subject)
+            if raise_on_error:
+                raise
 
     async def send_verification_otp(self, *, to_email: str, otp: str) -> None:
         settings = get_settings()
@@ -134,4 +137,28 @@ class SmtpEmailService(EmailService):
                 "Members of this company will no longer be able to log in. If you "
                 "believe this is a mistake, please contact support."
             ),
+        )
+
+    async def send_demo_request(
+        self,
+        *,
+        to_email: str,
+        name: str,
+        work_email: str,
+        company: str,
+        message: str,
+        ip_address: str | None = None,
+    ) -> None:
+        ip_line = f"\nIP: {ip_address}" if ip_address else ""
+        await self._send(
+            to_email=to_email,
+            subject=f"Demo request — {company}",
+            body=(
+                "New demo request from the public website.\n\n"
+                f"Name: {name}\n"
+                f"Work email: {work_email}\n"
+                f"Company: {company}\n"
+                f"Message:\n{message}{ip_line}\n"
+            ),
+            raise_on_error=True,
         )
