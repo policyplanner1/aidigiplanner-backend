@@ -18,6 +18,7 @@ from app.modules.products.router import router as products_router
 from app.modules.public.router import router as public_router
 from app.modules.social_accounts.router import router as social_accounts_router
 from app.modules.sub_products.router import router as sub_products_router
+from app.modules.webhooks.router import router as webhooks_router
 
 configure_logging()
 logger = get_logger(__name__)
@@ -84,6 +85,7 @@ def create_app() -> FastAPI:
     app.include_router(products_router)
     app.include_router(sub_products_router)
     app.include_router(social_accounts_router)
+    app.include_router(webhooks_router)
     app.include_router(brand_profiles_router)
     app.include_router(brand_analysis_router)
     app.include_router(creatives_router)

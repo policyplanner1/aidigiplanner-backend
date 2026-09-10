@@ -93,7 +93,7 @@ def test_google_youtube_authorize_url_requests_offline_access() -> None:
     assert params["client_id"] == ["google-client-id"]
     assert params["redirect_uri"] == ["http://localhost:8000/api/social/youtube/callback"]
     assert params["access_type"] == ["offline"]
-    assert params["prompt"] == ["consent"]
+    assert params["prompt"] == ["select_account consent"]
     assert params["state"] == ["signed-state"]
     scopes = unquote(params["scope"][0])
     assert "youtube.upload" in scopes

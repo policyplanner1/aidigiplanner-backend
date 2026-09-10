@@ -93,6 +93,9 @@ class Settings(BaseSettings):
     # Optional Facebook Login for Business configuration id. When set, Meta
     # shows the Page picker from that configuration instead of classic Login.
     meta_login_config_id: str = ""
+    # Shared secret Meta sends as hub.verify_token when subscribing the
+    # Instagram webhook at /api/webhooks/instagram.
+    meta_webhook_verify_token: str = "aidigiplanner-ig-verify"
 
     # Google OAuth client used to connect YouTube channels. Empty client_id
     # disables the YouTube flow.

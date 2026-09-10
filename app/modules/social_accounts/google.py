@@ -69,7 +69,7 @@ class GoogleYouTubeOAuthClient:
             "response_type": "code",
             "scope": YOUTUBE_SCOPES,
             "access_type": "offline",
-            "prompt": "consent",
+            "prompt": "select_account consent",
             "include_granted_scopes": "true",
             "state": state,
         }
@@ -150,20 +150,43 @@ class GoogleYouTubeOAuthClient:
         return _google_json(response, "Could not complete YouTube login.")
 
     async def _fetch_channel(self, access_token: str) -> dict[str, Any]:
-        params = {"part": "snippet,contentDetails", "mine": "true"}
         headers = {"Authorization": f"Bearer {access_token}"}
         async with httpx.AsyncClient(timeout=HTTP_TIMEOUT) as client:
-            response = await client.get(YOUTUBE_CHANNELS_URL, params=params, headers=headers)
-        data = _google_json(
-            response,
-            "Could not load the YouTube channel. Enable the YouTube Data API "
-            "for this Google Cloud project.",
-        )
-        items = data.get("items") or []
+            response = await client.get(
+                YOUTUBE_CHANNELS_URL,
+                params={"part": "snippet,contentDetails", "mine": "true"},
+                headers=headers,
+            )
+            data = _google_json(
+                response,
+                "Could not load the YouTube channel. Enable the YouTube Data API "
+                "for this Google Cloud project.",
+            )
+            items = data.get("items") or []
+            if not items:
+                managed = await client.get(
+                    YOUTUBE_CHANNELS_URL,
+                    params={"part": "snippet,contentDetails", "managedByMe": "true"},
+                    headers=headers,
+                )
+                if managed.status_code < 400:
+                    managed_data = managed.json()
+                    if isinstance(managed_data, dict):
+                        items = managed_data.get("items") or []
+                else:
+                    logger.info(
+                        "youtube_managed_by_me_failed",
+                        status_code=managed.status_code,
+                    )
+            email = await _google_account_email(client, headers)
+
         if not items:
+            who = f" ({email})" if email else ""
             raise BadRequestError(
-                "This Google account has no YouTube channel. Create a channel "
-                "on YouTube, then connect again.",
+                f"This Google account{who} has no YouTube channel the API can see. "
+                "On the Google screen pick the same account that owns the channel in "
+                "YouTube Studio. If it is a Brand Account, choose that Brand Account, "
+                "not only your Gmail login.",
                 code="youtube_channel_not_found",
             )
         item = items[0] if isinstance(items[0], dict) else {}
@@ -428,6 +451,24 @@ def _raise_google_detail(detail: str, fallback: str) -> dict[str, Any]:
     if "access_denied" in lowered:
         raise BadRequestError("Google connection was cancelled.")
     raise BadRequestError(text or fallback)
+
+
+async def _google_account_email(client: httpx.AsyncClient, headers: dict[str, str]) -> str:
+    try:
+        response = await client.get(
+            "https://www.googleapis.com/oauth2/v2/userinfo", headers=headers
+        )
+    except httpx.HTTPError:
+        return ""
+    if response.status_code >= 400:
+        return ""
+    try:
+        body = response.json()
+    except ValueError:
+        return ""
+    if not isinstance(body, dict):
+        return ""
+    return str(body.get("email") or "").strip()
 
 
 def _parse_gbp_location(item: dict[str, Any]) -> dict[str, Any] | None:
