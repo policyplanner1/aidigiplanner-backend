@@ -286,6 +286,10 @@ class CompanyService:
         if payload.group_website_url is not None:
             company.group_website_url = payload.group_website_url
 
+        await advance_onboarding_step(
+            self._session, company_id, CompanyOnboardingStep.brand_profile_completed
+        )
+
         await self._audit.log(
             action="company.group_profile_updated",
             actor_user_id=actor.id,
