@@ -17,6 +17,7 @@ class TestGetVideoProviderHeyGenBranch:
     ) -> None:
         monkeypatch.setenv("HEYGEN_API_KEY", "test-key")
         monkeypatch.setenv("HEYGEN_DEFAULT_VOICE_ID", "voice-123")
+        monkeypatch.setenv("HEYGEN_DEFAULT_AVATAR_ID", "digital-twin-123")
         settings = CreativeSettings(_env_file=None)
         provider = get_video_provider(dry_run=True, backend="heygen", settings=settings)
         assert isinstance(provider, MockVideoProvider)
@@ -32,6 +33,7 @@ class TestGetVideoProviderHeyGenBranch:
     ) -> None:
         monkeypatch.setenv("HEYGEN_API_KEY", "test-key")
         monkeypatch.setenv("HEYGEN_DEFAULT_VOICE_ID", "voice-123")
+        monkeypatch.setenv("HEYGEN_DEFAULT_AVATAR_ID", "digital-twin-123")
         settings = CreativeSettings(_env_file=None)
         provider = get_video_provider(dry_run=False, backend="heygen", settings=settings)
         assert isinstance(provider, HeyGenAvatarProvider)

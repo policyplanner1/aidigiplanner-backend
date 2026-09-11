@@ -226,7 +226,7 @@ def estimate_brief_cost(brief: Brief, settings: CreativeSettings) -> CostEstimat
         video_model = {
             "veo": models.video_veo,
             "omni": models.video_omni,
-            "heygen": "heygen-avatar-v2",
+            "heygen": "heygen-avatar-v-v3",
         }[backend]
         resolution_v = VIDEO_RESOLUTION_BY_QUALITY[brief.quality]
         per_second = costs.estimate_video_call_inr(backend, 1, resolution_v)
@@ -252,21 +252,14 @@ class CreativeSettings(BaseSettings):
     # No CREATIVE_ prefix -- shared verbatim with any other Gemini caller.
     gemini_api_key: str = Field(default="", alias="GEMINI_API_KEY")
 
-    # HeyGen (talking-avatar video, ReelStyle.avatar reels). No CREATIVE_
-    # prefix either, for the same reason as GEMINI_API_KEY above. Targets
-    # HeyGen's v3 API (single host, no separate upload host) -- see memory
-    # heygen_avatar_video_api.md and heygen_video.py's module docstring for
-    # the reference this was built against.
+    # HeyGen Avatar V (talking Photo Avatar video, ReelStyle.avatar reels).
     heygen_api_key: str = Field(default="", alias="HEYGEN_API_KEY")
     heygen_api_base_url: str = "https://api.heygen.com"
     # voice_id from HeyGen's GET /v3/voices -- BrandProfile has no per-brand
     # voice field today, so every avatar reel uses this one configured voice.
     heygen_default_voice_id: str = Field(default="", alias="HEYGEN_DEFAULT_VOICE_ID")
-    # Fallback HeyGen avatar_id used only when a brand has no
-    # BrandProfile.heygen_avatar_id persisted yet (see worker.py) -- lets a
-    # pre-existing/manually-created HeyGen avatar be used immediately
-    # without waiting for the normal register-from-brand-photo flow to run
-    # (and pay to create one) first.
+    # Fallback Photo Avatar look id used when a brand has no per-brand look.
+    # It must be completed and list avatar_v in supported_api_engines.
     heygen_default_avatar_id: str = Field(default="", alias="HEYGEN_DEFAULT_AVATAR_ID")
     heygen_poll_interval_s: float = 6.0
     heygen_poll_timeout_s: float = 600.0

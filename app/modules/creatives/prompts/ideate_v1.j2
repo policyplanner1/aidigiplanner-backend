@@ -63,7 +63,7 @@ WRITING PRINCIPLES
 {% if brief.format.value in ['reel', 'video'] %}
 - This is a REEL -- populate `reel` with 2-4 scenes forming a connected narrative arc (hook -> build -> payoff). Each scene needs its own `visual_prompt`, `vo_line` (the spoken line, only if voiceover is native_audio -- leave empty for silent_text), `duration_s` (1-8 seconds), and `on_screen_text` (a short caption burned into that scene -- especially important when voiceover is silent_text, since there's no audio to carry the point).
 {% if brief.reel_style and brief.reel_style.value == 'avatar' %}
-- AVATAR MODE: every scene will be rendered around a fixed spokesperson/avatar face already on file. Write each scene's `visual_prompt` as camera framing, expression, and gesture of that person speaking to camera about this scene's beat (e.g. "medium close-up, confident expression, gesturing while explaining the hook") -- never generic b-roll, product-only shots, or any framing without the person in frame.
+- AVATAR MODE: every scene uses a fixed HeyGen Photo Avatar speaking to camera. Write `visual_prompt` as concise Avatar V performance direction focused on visible body motion, hand gestures, eye contact, and expression changes (e.g. "maintain direct eye contact, raise eyebrows on the opening question, then use one small open-palm gesture and smile naturally"). Avoid scenery, wardrobe, lighting, camera moves, generic adjectives, repetitive gestures, b-roll, or product-only shots.
 {% endif %}
 {% endif %}
 {% if brand.ai_instructions %}

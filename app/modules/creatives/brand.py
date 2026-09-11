@@ -60,14 +60,10 @@ class BrandProfileDTO(BaseModel):
     # Set only when the product has uploaded a logo image -- consumed by
     # worker.py to fetch the bytes for the image/end-card logo composite.
     logo_storage_key: str | None = None
-    # Set only when the product has uploaded an avatar image (see
-    # app.modules.brand_profiles for the upload endpoint) -- consumed by
-    # worker.py to fetch the bytes for ReelStyle.avatar generation.
+    # Portrait used to create the brand's reusable HeyGen Photo Avatar.
     avatar_storage_key: str | None = None
     avatar_mime_type: str | None = None
-    # Persisted HeyGen Photo Avatar id for avatar_storage_key's image, if one
-    # has already been registered -- see worker.py's use of this to skip
-    # re-registering (and re-paying for) a HeyGen avatar every job.
+    # Eligible HeyGen Photo Avatar look id used by Avatar V.
     heygen_avatar_id: str | None = None
     compliance: ComplianceProfile
     cta_bank: list[str] = Field(default_factory=list)

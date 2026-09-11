@@ -143,7 +143,7 @@ class ReelStyle(StrEnum):
     # Scene-by-scene generated b-roll, matching the format the whole reel
     # pipeline was originally built for.
     story = "story"
-    # Every scene uses the product's uploaded brand-profile avatar image as
+    # Every scene uses the product's configured HeyGen Photo Avatar look as
     # its first-frame/style-reference instead of the concept's own cover
     # image, so the same face appears throughout the reel.
     avatar = "avatar"

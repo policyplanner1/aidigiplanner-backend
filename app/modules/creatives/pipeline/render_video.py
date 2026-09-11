@@ -30,7 +30,7 @@ def render_reel_clips(
     concept: GeneratedConcept,
     concept_index: int,
     *,
-    reference_image_bytes: bytes,
+    reference_image_bytes: bytes | None,
     quality: CreativeQuality,
     voiceover: VoiceoverMode,
     video_provider: VideoProvider,
@@ -47,7 +47,9 @@ def render_reel_clips(
             quality=quality,
             voiceover=voiceover,
             first_frame_image=reference_image_bytes if is_first else None,
-            reference_images=None if is_first else [reference_image_bytes],
+            reference_images=(
+                None if is_first or reference_image_bytes is None else [reference_image_bytes]
+            ),
         )
         if result.video_bytes is None:
             raise RuntimeError(
@@ -71,7 +73,7 @@ def render_reel_clips(
 def render_reel_clips_for_concepts(
     indexed_concepts: list[tuple[int, GeneratedConcept]],
     *,
-    reference_images: dict[int, bytes],
+    reference_images: dict[int, bytes | None],
     quality: CreativeQuality,
     voiceover: VoiceoverMode,
     video_provider: VideoProvider,
@@ -83,9 +85,9 @@ def render_reel_clips_for_concepts(
     for concept_index, concept in indexed_concepts:
         if concept.reel is None:
             continue
-        reference = reference_images.get(concept_index)
-        if reference is None:
+        if concept_index not in reference_images:
             raise ValueError(f"no reference image available for concept {concept_index}")
+        reference = reference_images[concept_index]
         assets.extend(
             render_reel_clips(
                 concept,

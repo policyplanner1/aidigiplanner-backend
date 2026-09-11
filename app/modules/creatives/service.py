@@ -99,11 +99,16 @@ class CreativeService:
                 f"Unknown product line {brief.product_line!r} for this brand profile."
             ) from exc
 
-        if brief.reel_style == ReelStyle.avatar and brand_row.avatar_storage_key is None:
-            raise BadRequestError(
-                "This product has no avatar image uploaded yet. Upload one via "
-                "PUT .../brand-profile/avatar before generating avatar-style reels."
+        creative_settings = get_creative_settings()
+        if brief.reel_style == ReelStyle.avatar:
+            has_photo_avatar = bool(
+                brand_row.heygen_avatar_id or creative_settings.heygen_default_avatar_id
             )
+            if not has_photo_avatar and brand_row.avatar_storage_key is None:
+                raise BadRequestError(
+                    "Photo Avatar generation requires an uploaded avatar image or an existing "
+                    "HeyGen Photo Avatar look id."
+                )
 
         job_key = brief.job_key(IDEATE_PROMPT_VERSION)
         if not payload.force:
@@ -111,7 +116,6 @@ class CreativeService:
             if existing_job is not None:
                 return existing_job
 
-        creative_settings = get_creative_settings()
         estimate = estimate_brief_cost(brief, creative_settings)
 
         if estimate.total_inr > creative_settings.max_cost_per_run_inr:

@@ -354,17 +354,20 @@ async def _run_asset_rendering(session: AsyncSession, job_id: str, storage: Stor
         # Reels get a video-rendering pass on top of the cover image every
         # format already gets above. Story reels use each concept's own
         # cover as the scene reference; avatar reels use the one shared
-        # brand-profile avatar image for every concept instead (validated
-        # to exist at request time -- see CreativeService.request_generation).
+        # brand-profile portrait used to create/reuse its HeyGen Photo Avatar.
         if brief.format in REEL_LIKE_FORMATS and indexed_accepted:
             reel_concepts = [(idx, c) for idx, c in indexed_accepted if c.reel is not None]
         else:
             reel_concepts = []
 
         if reel_concepts:
+            reference_images: dict[int, bytes | None]
             if brief_row.reel_style == ReelStyle.avatar:
-                assert brand_row.avatar_storage_key is not None
-                avatar_bytes = await storage.read(brand_row.avatar_storage_key)
+                avatar_bytes = (
+                    await storage.read(brand_row.avatar_storage_key)
+                    if brand_row.avatar_storage_key
+                    else None
+                )
                 reference_images = {idx: avatar_bytes for idx, _ in reel_concepts}
             else:
                 cover_bytes_by_index = {
@@ -380,9 +383,8 @@ async def _run_asset_rendering(session: AsyncSession, job_id: str, storage: Stor
             # whenever format is reel -- see domain.Brief._check_format_specific_fields.
             assert brief.voiceover is not None
             backend = video_backend_for_reel(brief.voiceover, brief.reel_style)
-            # A brand that already has a registered HeyGen avatar (or one
-            # seeded via HEYGEN_DEFAULT_AVATAR_ID) reuses it -- registering a
-            # new one costs real money, see HeyGenAvatarProvider's docstring.
+            # Reuse a persisted Photo Avatar look, otherwise the provider
+            # creates one from avatar_bytes and exposes its id for persistence.
             heygen_known_avatar_id = (
                 brand_row.heygen_avatar_id or creative_settings.heygen_default_avatar_id or None
             )
@@ -404,10 +406,6 @@ async def _run_asset_rendering(session: AsyncSession, job_id: str, storage: Stor
                 voiceover=brief.voiceover,
                 video_provider=video_provider,
             )
-            # If this job just registered a brand-new HeyGen avatar (no
-            # known_avatar_id was available going in), persist it so every
-            # later job for this brand reuses it instead of paying to
-            # register another one.
             if (
                 isinstance(video_provider, HeyGenAvatarProvider)
                 and video_provider.avatar_id
@@ -485,7 +483,9 @@ async def _run_asset_rendering(session: AsyncSession, job_id: str, storage: Stor
         job = await session.get(GenerationJob, job_id)
         if job is not None:
             job.status = (
-                GenerationJobStatus.partially_failed if rendered_assets else GenerationJobStatus.failed
+                GenerationJobStatus.partially_failed
+                if rendered_assets
+                else GenerationJobStatus.failed
             )
             job.error_message = "Rendering timed out."
             job.finished_at = utcnow()

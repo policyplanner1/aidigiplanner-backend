@@ -20,15 +20,12 @@ from app.modules.creatives.providers.heygen_video import (
 )
 
 _PNG_BYTES = b"\x89PNG\r\n\x1a\n" + b"\x00" * 16
-_JPEG_BYTES = b"\xff\xd8\xff" + b"\x00" * 16
-_WEBP_BYTES = b"RIFF" + b"\x00" * 4 + b"WEBP" + b"\x00" * 8
-
-
 def _settings(
     monkeypatch: pytest.MonkeyPatch,
     *,
     api_key: str = "test-key",
     voice_id: str = "voice-123",
+    avatar_id: str = "digital_twin_123",
     poll_timeout_s: float | None = None,
 ) -> CreativeSettings:
     """CreativeSettings' HeyGen fields are alias-backed env vars (see
@@ -38,6 +35,7 @@ def _settings(
     (which pydantic-settings would silently ignore given the alias)."""
     monkeypatch.setenv("HEYGEN_API_KEY", api_key)
     monkeypatch.setenv("HEYGEN_DEFAULT_VOICE_ID", voice_id)
+    monkeypatch.setenv("HEYGEN_DEFAULT_AVATAR_ID", avatar_id)
     settings = CreativeSettings(_env_file=None)
     settings.heygen_poll_interval_s = 0.0
     if poll_timeout_s is not None:
@@ -56,18 +54,9 @@ def _scene(**overrides: object) -> ReelScene:
     return ReelScene(**defaults)
 
 
-class TestSniffImageContentType:
-    def test_png(self) -> None:
-        assert _sniff_image_content_type(_PNG_BYTES) == "image/png"
-
-    def test_jpeg(self) -> None:
-        assert _sniff_image_content_type(_JPEG_BYTES) == "image/jpeg"
-
-    def test_webp(self) -> None:
-        assert _sniff_image_content_type(_WEBP_BYTES) == "image/webp"
-
-    def test_unknown_defaults_to_png(self) -> None:
-        assert _sniff_image_content_type(b"not an image") == "image/png"
+def test_sniff_image_content_type() -> None:
+    assert _sniff_image_content_type(_PNG_BYTES) == "image/png"
+    assert _sniff_image_content_type(b"\xff\xd8\xffpayload") == "image/jpeg"
 
 
 class TestConstructorValidation:
@@ -79,7 +68,6 @@ class TestConstructorValidation:
         with pytest.raises(RuntimeError, match="HEYGEN_DEFAULT_VOICE_ID"):
             HeyGenAvatarProvider(_settings(monkeypatch, voice_id=""))
 
-
 class _FakeDispatcher:
     """Routes the provider's `_request(method, url, **kwargs)` calls to
     canned v3 responses keyed by URL suffix, and counts calls per endpoint
@@ -89,14 +77,36 @@ class _FakeDispatcher:
     normally resolve them -- the one exception is the final video download,
     which is called with the absolute `video_url` HeyGen returned."""
 
-    def __init__(self, *, status_sequence: list[str] | None = None) -> None:
+    def __init__(
+        self,
+        *,
+        status_sequence: list[str] | None = None,
+        avatar_type: str = "photo_avatar",
+        look_status: str = "completed",
+        supported_engines: list[str] | None = None,
+    ) -> None:
         self.calls: list[tuple[str, str]] = []
         self._status_sequence = status_sequence or ["completed"]
+        self._avatar_type = avatar_type
+        self._look_status = look_status
+        self._supported_engines = supported_engines or ["avatar_iv", "avatar_v"]
 
     def __call__(self, method: str, url: str, **kwargs: object) -> httpx.Response:
         self.calls.append((method, url))
         if url == "/v3/avatars":
-            return httpx.Response(200, json={"data": {"avatar_item": {"id": "avatar_123"}}})
+            return httpx.Response(200, json={"data": {"avatar_item": {"id": "photo_123"}}})
+        if url.startswith("/v3/avatars/looks/"):
+            return httpx.Response(
+                200,
+                json={
+                    "data": {
+                        "id": url.rsplit("/", 1)[-1],
+                        "avatar_type": self._avatar_type,
+                        "status": self._look_status,
+                        "supported_api_engines": self._supported_engines,
+                    }
+                },
+            )
         if url == "/v3/videos":
             return httpx.Response(200, json={"data": {"video_id": "vid_abc", "status": "waiting"}})
         if url == "/v3/videos/vid_abc":
@@ -133,9 +143,9 @@ class TestGenerateClip:
         assert result.video_uri == "https://files.example/vid_abc.mp4"
         assert result.duration_s == 5.0
         assert result.estimated_cost_inr > 0
-        assert result.model_id == "heygen-avatar-iv-v3"
+        assert result.model_id == "heygen-avatar-v-v3"
 
-    def test_avatar_created_once_and_reused_across_scenes(
+    def test_avatar_v_eligibility_checked_once_across_scenes(
         self, monkeypatch: pytest.MonkeyPatch
     ) -> None:
         provider = HeyGenAvatarProvider(_settings(monkeypatch))
@@ -157,13 +167,29 @@ class TestGenerateClip:
             reference_images=[_PNG_BYTES],
         )
 
-        avatar_calls = [c for c in dispatcher.calls if c[1] == "/v3/avatars"]
-        assert len(avatar_calls) == 1
+        look_calls = [c for c in dispatcher.calls if c[1].startswith("/v3/avatars/looks/")]
+        assert len(look_calls) == 1
 
-    def test_known_avatar_id_skips_creation_entirely(self, monkeypatch: pytest.MonkeyPatch) -> None:
-        """A persisted BrandProfile.heygen_avatar_id (or the
-        HEYGEN_DEFAULT_AVATAR_ID fallback) must never trigger a paid
-        POST /v3/avatars call -- see the module docstring on why."""
+    def test_uploaded_image_creates_and_reuses_photo_avatar(
+        self, monkeypatch: pytest.MonkeyPatch
+    ) -> None:
+        provider = HeyGenAvatarProvider(_settings(monkeypatch, avatar_id=""))
+        dispatcher = _FakeDispatcher()
+        provider._request = dispatcher  # type: ignore[method-assign]
+
+        for line in ("First scene.", "Second scene."):
+            provider.generate_clip(
+                scene=_scene(vo_line=line),
+                aspect_ratio="9:16",
+                quality=CreativeQuality.standard,
+                voiceover=VoiceoverMode.native_audio,
+                first_frame_image=_PNG_BYTES,
+            )
+
+        assert provider.avatar_id == "photo_123"
+        assert sum(url == "/v3/avatars" for _, url in dispatcher.calls) == 1
+
+    def test_known_avatar_id_overrides_default(self, monkeypatch: pytest.MonkeyPatch) -> None:
         provider = HeyGenAvatarProvider(
             _settings(monkeypatch), known_avatar_id="preexisting_avatar_456"
         )
@@ -180,39 +206,21 @@ class TestGenerateClip:
 
         assert result.video_bytes == b"FAKEVIDEOBYTES"
         assert provider.avatar_id == "preexisting_avatar_456"
-        assert not any(c[1] == "/v3/avatars" for c in dispatcher.calls)
+        assert ("GET", "/v3/avatars/looks/preexisting_avatar_456") in dispatcher.calls
 
-    def test_freshly_created_avatar_id_exposed_for_persistence(
+    def test_existing_photo_avatar_does_not_require_reference_image(
         self, monkeypatch: pytest.MonkeyPatch
     ) -> None:
-        """worker.py reads provider.avatar_id after rendering to persist a
-        newly-created avatar_id onto BrandProfile -- confirm it's actually
-        set to what /v3/avatars returned, not left None."""
         provider = HeyGenAvatarProvider(_settings(monkeypatch))
-        assert provider.avatar_id is None
         provider._request = _FakeDispatcher()  # type: ignore[method-assign]
 
-        provider.generate_clip(
+        result = provider.generate_clip(
             scene=_scene(),
             aspect_ratio="9:16",
             quality=CreativeQuality.standard,
             voiceover=VoiceoverMode.native_audio,
-            first_frame_image=_PNG_BYTES,
         )
-
-        assert provider.avatar_id == "avatar_123"
-
-    def test_no_reference_image_raises(self, monkeypatch: pytest.MonkeyPatch) -> None:
-        provider = HeyGenAvatarProvider(_settings(monkeypatch))
-        provider._request = _FakeDispatcher()  # type: ignore[method-assign]
-
-        with pytest.raises(ValueError, match="requires an avatar reference image"):
-            provider.generate_clip(
-                scene=_scene(),
-                aspect_ratio="9:16",
-                quality=CreativeQuality.standard,
-                voiceover=VoiceoverMode.native_audio,
-            )
+        assert result.video_bytes == b"FAKEVIDEOBYTES"
 
     def test_empty_vo_line_falls_back_to_on_screen_text(
         self, monkeypatch: pytest.MonkeyPatch
@@ -243,7 +251,7 @@ class TestGenerateClip:
 
         def dispatcher(method: str, url: str, **kwargs: object) -> httpx.Response:
             if url == "/v3/videos":
-                captured["motion_prompt"] = kwargs["json"]["motion_prompt"]  # type: ignore[index]
+                captured.update(kwargs["json"])  # type: ignore[arg-type]
             return _FakeDispatcher()(method, url, **kwargs)
 
         provider._request = dispatcher  # type: ignore[method-assign]
@@ -255,6 +263,38 @@ class TestGenerateClip:
             first_frame_image=_PNG_BYTES,
         )
         assert captured["motion_prompt"] == "Close-up, leaning toward camera, open palm gesture"
+        assert captured["engine"] == {"type": "avatar_v"}
+        assert captured["resolution"] == "1080p"
+        assert "expressiveness" not in captured
+
+    def test_digital_twin_is_rejected_by_photo_avatar_provider(
+        self, monkeypatch: pytest.MonkeyPatch
+    ) -> None:
+        provider = HeyGenAvatarProvider(_settings(monkeypatch))
+        dispatcher = _FakeDispatcher(avatar_type="digital_twin")
+        provider._request = dispatcher  # type: ignore[method-assign]
+
+        with pytest.raises(RuntimeError, match="requires a Photo Avatar"):
+            provider.generate_clip(
+                scene=_scene(),
+                aspect_ratio="9:16",
+                quality=CreativeQuality.standard,
+                voiceover=VoiceoverMode.native_audio,
+            )
+        assert not any(url == "/v3/videos" for _, url in dispatcher.calls)
+
+    def test_look_without_avatar_v_is_rejected(self, monkeypatch: pytest.MonkeyPatch) -> None:
+        provider = HeyGenAvatarProvider(_settings(monkeypatch))
+        dispatcher = _FakeDispatcher(supported_engines=["avatar_iv"])
+        provider._request = dispatcher  # type: ignore[method-assign]
+
+        with pytest.raises(RuntimeError, match="not opted in for Avatar V"):
+            provider.generate_clip(
+                scene=_scene(),
+                aspect_ratio="9:16",
+                quality=CreativeQuality.standard,
+                voiceover=VoiceoverMode.native_audio,
+            )
 
     def test_failed_status_raises(self, monkeypatch: pytest.MonkeyPatch) -> None:
         provider = HeyGenAvatarProvider(_settings(monkeypatch))

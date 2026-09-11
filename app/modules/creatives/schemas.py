@@ -30,7 +30,8 @@ class GenerateCreativesRequest(BaseModel):
     voiceover: VoiceoverMode | None = None
     # story (default) or avatar -- only meaningful when format is "reel".
     # avatar requires the product to have already uploaded a brand-profile
-    # avatar image (PUT .../brand-profile/avatar).
+    # reusable HeyGen Photo Avatar (Avatar V), created from the uploaded
+    # image supplied through PUT .../brand-profile/avatar.
     reel_style: ReelStyle | None = None
     # Phase 15's Quick-Create platform checklist.
     platforms: list[SocialPlatform] = Field(default_factory=list)

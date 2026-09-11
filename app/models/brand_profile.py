@@ -75,13 +75,8 @@ class BrandProfile(UUIDPKMixin, TimestampMixin, Base):
     # a raw filesystem path -- same convention as CreativeAsset.storage_key.
     avatar_storage_key: Mapped[str | None] = mapped_column(String(500), nullable=True)
     avatar_mime_type: Mapped[str | None] = mapped_column(String(128), nullable=True)
-    # HeyGen Photo Avatar id created from avatar_storage_key's image (see
-    # app.modules.creatives.providers.heygen_video.HeyGenAvatarProvider).
-    # Persisted once so re-rendering avatar-style reels reuses the same
-    # HeyGen avatar instead of paying to register a new one every job --
-    # set by the worker the first time it creates one for this brand, and
-    # cleared automatically only if avatar_storage_key changes (see
-    # brand_profiles/service.py's avatar upload handler).
+    # Reusable HeyGen Photo Avatar look id created from avatar_storage_key.
+    # The look must be ready and list avatar_v in supported_api_engines.
     heygen_avatar_id: Mapped[str | None] = mapped_column(String(255), nullable=True)
     compliance_mandatory_disclaimer: Mapped[str] = mapped_column(Text, nullable=False)
     compliance_secondary_disclaimers: Mapped[list[str]] = mapped_column(

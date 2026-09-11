@@ -51,7 +51,7 @@ def get_video_provider(
     `heygen_known_avatar_id` (ignored by every other backend) is threaded
     through from worker.py's BrandProfile.heygen_avatar_id/
     heygen_default_avatar_id resolution -- see HeyGenAvatarProvider's
-    module docstring for why reusing an existing avatar_id matters."""
+    module docstring for the Avatar V Digital Twin eligibility rules."""
     if backend == "heygen":
         if dry_run or not settings.heygen_api_key:
             return MockVideoProvider()
