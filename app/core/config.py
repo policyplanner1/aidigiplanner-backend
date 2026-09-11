@@ -84,6 +84,15 @@ class Settings(BaseSettings):
     # Auth0 Management API is not required.
     meta_app_id: str = ""
     meta_app_secret: str = ""
+    # Instagram Login credentials from Use cases → Instagram → API setup
+    # with Instagram login. These are NOT App settings → Basic. Using the
+    # Facebook App ID on instagram.com/oauth/authorize returns
+    # "Invalid platform app".
+    instagram_app_id: str = ""
+    instagram_app_secret: str = ""
+    # Instagram Login Valid OAuth Redirect URI. Must be HTTPS and must match
+    # Meta → Use cases → Instagram → API setup with Instagram login.
+    # Do not use the webhook URL here — that is a different Meta field.
     meta_redirect_uri: str = "http://localhost:8000/api/social/instagram/callback"
     meta_facebook_redirect_uri: str = "http://localhost:8000/api/social/facebook/callback"
     meta_oauth_scope: str = "instagram_business_basic"

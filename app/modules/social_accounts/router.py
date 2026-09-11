@@ -1,8 +1,8 @@
-from html import escape
 from typing import Annotated
+from urllib.parse import parse_qs, urlparse
 
 from fastapi import APIRouter, Depends, File, Form, Query, Response, UploadFile, status
-from fastapi.responses import HTMLResponse, RedirectResponse
+from fastapi.responses import RedirectResponse
 
 from app.core.deps import CurrentUser, DbSession, require_product_access
 from app.core.rate_limit import rate_limit_by_ip
@@ -17,7 +17,7 @@ from app.modules.social_accounts.schemas import (
     StartSocialOAuthRequest,
     StartSocialOAuthResponse,
 )
-from app.modules.social_accounts.service import SocialAccountService, SocialOAuthCallbackResult
+from app.modules.social_accounts.service import SocialAccountService
 
 router = APIRouter(tags=["social-accounts"])
 
@@ -31,6 +31,14 @@ def get_social_account_service(
 
 
 SocialAccountServiceDep = Annotated[SocialAccountService, Depends(get_social_account_service)]
+
+
+def _oauth_start_response(authorize_url: str) -> StartSocialOAuthResponse:
+    values = parse_qs(urlparse(authorize_url).query).get("redirect_uri") or [""]
+    return StartSocialOAuthResponse(
+        authorize_url=authorize_url,
+        redirect_uri=values[0] or None,
+    )
 
 
 @router.get(
@@ -77,7 +85,7 @@ async def start_social_oauth(
     payload: StartSocialOAuthRequest | None = None,
 ) -> StartSocialOAuthResponse:
     authorize_url = await service.start_oauth(product_id, current_user, platform, payload)
-    return StartSocialOAuthResponse(authorize_url=authorize_url)
+    return _oauth_start_response(authorize_url)
 
 
 @router.get(
@@ -94,14 +102,15 @@ async def start_social_oauth_get(
     current_user: CurrentUser,
     service: SocialAccountServiceDep,
     return_to: str | None = Query(default=None),
+    return_origin: str | None = Query(default=None),
 ) -> StartSocialOAuthResponse:
     authorize_url = await service.start_oauth(
         product_id,
         current_user,
         platform,
-        StartSocialOAuthRequest(return_to=return_to),
+        StartSocialOAuthRequest(return_to=return_to, return_origin=return_origin),
     )
-    return StartSocialOAuthResponse(authorize_url=authorize_url)
+    return _oauth_start_response(authorize_url)
 
 
 @router.get(
@@ -114,14 +123,15 @@ async def connect_instagram(
     service: SocialAccountServiceDep,
     product_id: str = Query(...),
     return_to: str | None = Query(default=None),
+    return_origin: str | None = Query(default=None),
 ) -> StartSocialOAuthResponse:
     authorize_url = await service.start_oauth(
         product_id,
         current_user,
         SocialPlatform.instagram,
-        StartSocialOAuthRequest(return_to=return_to),
+        StartSocialOAuthRequest(return_to=return_to, return_origin=return_origin),
     )
-    return StartSocialOAuthResponse(authorize_url=authorize_url)
+    return _oauth_start_response(authorize_url)
 
 
 @router.get(
@@ -134,14 +144,15 @@ async def connect_facebook(
     service: SocialAccountServiceDep,
     product_id: str = Query(...),
     return_to: str | None = Query(default=None),
+    return_origin: str | None = Query(default=None),
 ) -> StartSocialOAuthResponse:
     authorize_url = await service.start_oauth(
         product_id,
         current_user,
         SocialPlatform.facebook,
-        StartSocialOAuthRequest(return_to=return_to),
+        StartSocialOAuthRequest(return_to=return_to, return_origin=return_origin),
     )
-    return StartSocialOAuthResponse(authorize_url=authorize_url)
+    return _oauth_start_response(authorize_url)
 
 
 @router.get(
@@ -154,14 +165,15 @@ async def connect_youtube(
     service: SocialAccountServiceDep,
     product_id: str = Query(...),
     return_to: str | None = Query(default=None),
+    return_origin: str | None = Query(default=None),
 ) -> StartSocialOAuthResponse:
     authorize_url = await service.start_oauth(
         product_id,
         current_user,
         SocialPlatform.youtube,
-        StartSocialOAuthRequest(return_to=return_to),
+        StartSocialOAuthRequest(return_to=return_to, return_origin=return_origin),
     )
-    return StartSocialOAuthResponse(authorize_url=authorize_url)
+    return _oauth_start_response(authorize_url)
 
 
 @router.post(
@@ -231,7 +243,7 @@ async def auth0_social_callback(
     state: str | None = Query(default=None),
     error: str | None = Query(default=None),
     error_description: str | None = Query(default=None),
-) -> RedirectResponse | HTMLResponse:
+) -> RedirectResponse:
     return await _oauth_callback_response(
         service, code=code, state=state, error=error, error_description=error_description
     )
@@ -249,7 +261,7 @@ async def instagram_oauth_callback(
     state: str | None = Query(default=None),
     error: str | None = Query(default=None),
     error_description: str | None = Query(default=None),
-) -> RedirectResponse | HTMLResponse:
+) -> RedirectResponse:
     return await _oauth_callback_response(
         service, code=code, state=state, error=error, error_description=error_description
     )
@@ -267,7 +279,7 @@ async def facebook_oauth_callback(
     state: str | None = Query(default=None),
     error: str | None = Query(default=None),
     error_description: str | None = Query(default=None),
-) -> RedirectResponse | HTMLResponse:
+) -> RedirectResponse:
     return await _oauth_callback_response(
         service, code=code, state=state, error=error, error_description=error_description
     )
@@ -285,7 +297,7 @@ async def youtube_oauth_callback(
     state: str | None = Query(default=None),
     error: str | None = Query(default=None),
     error_description: str | None = Query(default=None),
-) -> RedirectResponse | HTMLResponse:
+) -> RedirectResponse:
     return await _oauth_callback_response(
         service, code=code, state=state, error=error, error_description=error_description
     )
@@ -301,14 +313,15 @@ async def connect_google_business(
     service: SocialAccountServiceDep,
     product_id: str = Query(...),
     return_to: str | None = Query(default=None),
+    return_origin: str | None = Query(default=None),
 ) -> StartSocialOAuthResponse:
     authorize_url = await service.start_oauth(
         product_id,
         current_user,
         SocialPlatform.google,
-        StartSocialOAuthRequest(return_to=return_to),
+        StartSocialOAuthRequest(return_to=return_to, return_origin=return_origin),
     )
-    return StartSocialOAuthResponse(authorize_url=authorize_url)
+    return _oauth_start_response(authorize_url)
 
 
 @router.get(
@@ -323,7 +336,7 @@ async def google_business_oauth_callback(
     state: str | None = Query(default=None),
     error: str | None = Query(default=None),
     error_description: str | None = Query(default=None),
-) -> RedirectResponse | HTMLResponse:
+) -> RedirectResponse:
     return await _oauth_callback_response(
         service, code=code, state=state, error=error, error_description=error_description
     )
@@ -336,35 +349,9 @@ async def _oauth_callback_response(
     state: str | None,
     error: str | None,
     error_description: str | None,
-) -> RedirectResponse | HTMLResponse:
+) -> RedirectResponse:
     result = await service.complete_oauth(
         code=code, state=state, error=error, error_description=error_description
     )
     redirect_url = service.callback_response_url(result)
-    if redirect_url:
-        return RedirectResponse(url=redirect_url, status_code=status.HTTP_302_FOUND)
-    return HTMLResponse(content=_callback_html(result), status_code=200 if result.ok else 400)
-
-
-def _callback_html(result: SocialOAuthCallbackResult) -> str:
-    if result.platform == SocialPlatform.youtube.value:
-        label = "YouTube"
-    elif result.platform == SocialPlatform.google.value:
-        label = "Google Business Profile"
-    elif result.platform == SocialPlatform.facebook.value:
-        label = "Facebook"
-    else:
-        label = "Instagram"
-    if result.ok:
-        handle = escape(result.handle or "")
-        return (
-            f"<!doctype html><title>{label} Connected</title>"
-            f"<h1>{label} Connected ✓</h1>"
-            f"<p>{handle} is now connected.</p>"
-        )
-    message = escape(result.message or f"Could not connect {label}.")
-    return (
-        f"<!doctype html><title>{label} connection failed</title>"
-        f"<h1>{label} connection failed</h1>"
-        f"<p>{message}</p>"
-    )
+    return RedirectResponse(url=redirect_url, status_code=status.HTTP_302_FOUND)

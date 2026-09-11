@@ -67,7 +67,7 @@ class MetaSocialOAuthClient:
         if platform is SocialPlatform.instagram:
             scope = _instagram_login_scope(self._settings.meta_oauth_scope)
             params = {
-                "client_id": self._settings.meta_app_id,
+                "client_id": self._instagram_app_id(),
                 "redirect_uri": self._redirect_uri(platform),
                 "state": state,
                 "response_type": "code",
@@ -75,6 +75,11 @@ class MetaSocialOAuthClient:
                 "enable_fb_login": "0",
                 "force_authentication": "1",
             }
+            logger.info(
+                "instagram_oauth_authorize",
+                redirect_uri=params["redirect_uri"],
+                client_id=params["client_id"],
+            )
             return f"{INSTAGRAM_AUTH_URL}?{urlencode(params)}"
 
         scope = self._scope_for(platform)
@@ -184,8 +189,8 @@ class MetaSocialOAuthClient:
 
     async def _exchange_instagram_code(self, code: str) -> dict[str, Any]:
         payload = {
-            "client_id": self._settings.meta_app_id,
-            "client_secret": self._settings.meta_app_secret,
+            "client_id": self._instagram_app_id(),
+            "client_secret": self._instagram_app_secret(),
             "grant_type": "authorization_code",
             "redirect_uri": self._redirect_uri(SocialPlatform.instagram),
             "code": code,
@@ -200,10 +205,16 @@ class MetaSocialOAuthClient:
                 return first
         return data
 
+    def _instagram_app_id(self) -> str:
+        return (self._settings.instagram_app_id or self._settings.meta_app_id).strip()
+
+    def _instagram_app_secret(self) -> str:
+        return (self._settings.instagram_app_secret or self._settings.meta_app_secret).strip()
+
     def _redirect_uri(self, platform: SocialPlatform) -> str:
         if platform is SocialPlatform.facebook:
-            return self._settings.meta_facebook_redirect_uri
-        return self._settings.meta_redirect_uri
+            return self._settings.meta_facebook_redirect_uri.strip()
+        return self._settings.meta_redirect_uri.strip()
 
     def _scope_for(self, platform: SocialPlatform) -> str:
         raw = (

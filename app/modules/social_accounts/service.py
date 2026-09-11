@@ -1,5 +1,4 @@
 from dataclasses import dataclass
-from urllib.parse import parse_qsl, urlencode, urlparse, urlunparse
 
 from sqlalchemy import select
 from sqlalchemy.exc import IntegrityError, OperationalError
@@ -31,6 +30,8 @@ from app.modules.social_accounts.schemas import AddSocialAccountRequest, StartSo
 from app.modules.social_accounts.state import (
     decode_oauth_state,
     encode_oauth_state,
+    oauth_callback_redirect_url,
+    safe_oauth_frontend_origin,
     safe_oauth_return_to,
 )
 from app.modules.social_accounts.tokens import decrypt_secret, encrypt_secret
@@ -53,6 +54,7 @@ class SocialOAuthCallbackResult:
     handle: str | None = None
     message: str | None = None
     return_to: str | None = None
+    frontend_origin: str | None = None
 
 
 class SocialAccountService:
@@ -232,6 +234,7 @@ class SocialAccountService:
             scope=payload.scope,
             sub_product_ids=payload.sub_product_ids,
             return_to=payload.return_to,
+            frontend_origin=payload.return_origin,
         )
         return self._oauth.build_authorize_url(platform=platform, state=state)
 
@@ -256,6 +259,9 @@ class SocialAccountService:
         return_to = safe_oauth_return_to(
             str(claims["return_to"]) if claims and claims.get("return_to") else None
         )
+        frontend_origin = safe_oauth_frontend_origin(
+            str(claims["frontend_origin"]) if claims and claims.get("frontend_origin") else None
+        )
 
         if error:
             reason = error_description or error
@@ -265,6 +271,7 @@ class SocialAccountService:
                 platform=platform,
                 message=_user_facing_oauth_error(reason, platform),
                 return_to=return_to,
+                frontend_origin=frontend_origin,
             )
         if not code or not claims:
             return SocialOAuthCallbackResult(
@@ -273,6 +280,7 @@ class SocialAccountService:
                 platform=platform,
                 message=f"{label} connection expired or is invalid. Please try again.",
                 return_to=return_to,
+                frontend_origin=frontend_origin,
             )
         try:
             requested_platform = SocialPlatform(platform)
@@ -285,6 +293,7 @@ class SocialAccountService:
                 platform=platform,
                 message="Social account OAuth is not configured.",
                 return_to=return_to,
+                frontend_origin=frontend_origin,
             )
 
         try:
@@ -329,15 +338,21 @@ class SocialAccountService:
                 platform=platform,
                 message=exc.message,
                 return_to=return_to,
+                frontend_origin=frontend_origin,
             )
-        except OperationalError:
+        except OperationalError as exc:
             logger.exception("social_oauth_schema_error")
+            detail = str(getattr(exc, "orig", None) or exc).strip()
+            message = "Database is missing social OAuth columns. Run alembic upgrade head."
+            if get_settings().env == "development" and detail:
+                message = f"{message} ({detail[:240]})"
             return SocialOAuthCallbackResult(
                 ok=False,
                 product_id=product_id,
                 platform=platform,
-                message="Database is missing social OAuth columns. Run alembic upgrade head.",
+                message=message,
                 return_to=return_to,
+                frontend_origin=frontend_origin,
             )
         except IntegrityError:
             logger.exception("social_oauth_conflict")
@@ -347,6 +362,7 @@ class SocialAccountService:
                 platform=platform,
                 message=f"This {label} account is already linked to the product.",
                 return_to=return_to,
+                frontend_origin=frontend_origin,
             )
         except Exception as exc:
             logger.exception("social_oauth_callback_failed")
@@ -363,6 +379,7 @@ class SocialAccountService:
                 platform=platform,
                 message=message,
                 return_to=return_to,
+                frontend_origin=frontend_origin,
             )
 
         return SocialOAuthCallbackResult(
@@ -371,12 +388,10 @@ class SocialAccountService:
             platform=profile.platform.value,
             handle=account.handle,
             return_to=return_to,
+            frontend_origin=frontend_origin,
         )
 
-    def callback_response_url(self, result: SocialOAuthCallbackResult) -> str | None:
-        frontend = get_settings().frontend_url.rstrip("/")
-        if not frontend:
-            return None
+    def callback_response_url(self, result: SocialOAuthCallbackResult) -> str:
         params: dict[str, str] = {
             "platform": result.platform,
             "status": "connected" if result.ok else "error",
@@ -387,10 +402,11 @@ class SocialAccountService:
             params["handle"] = result.handle
         if result.message:
             params["message"] = result.message
-        parsed = urlparse(f"{frontend}{safe_oauth_return_to(result.return_to)}")
-        query = dict(parse_qsl(parsed.query))
-        query.update(params)
-        return urlunparse(parsed._replace(query=urlencode(query)))
+        return oauth_callback_redirect_url(
+            return_to=result.return_to,
+            frontend_origin=result.frontend_origin,
+            params=params,
+        )
 
     async def _upsert_oauth_account(
         self,

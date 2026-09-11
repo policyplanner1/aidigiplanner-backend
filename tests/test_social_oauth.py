@@ -12,6 +12,7 @@ from app.modules.social_accounts.google import GoogleBusinessOAuthClient, Google
 from app.modules.social_accounts.meta import MetaSocialOAuthClient
 from app.modules.social_accounts.oauth import Auth0SocialOAuthClient, _sub_from_id_token
 from app.modules.social_accounts.tokens import decrypt_secret
+from app.modules.social_accounts.state import oauth_callback_redirect_url
 from tests.factories import register_and_login
 from tests.fakes import (
     FakeSocialOAuthClient,
@@ -121,11 +122,28 @@ def test_google_business_authorize_url_requests_offline_access() -> None:
     assert "business.manage" in scopes
 
 
+def test_oauth_callback_redirect_url_returns_spa_path() -> None:
+    url = oauth_callback_redirect_url(
+        return_to="/app/social-accounts",
+        frontend_origin="http://localhost:5173",
+        params={"platform": "instagram", "status": "connected", "product_id": "prod-1"},
+    )
+    parsed = urlparse(url)
+    assert parsed.netloc == "localhost:5173"
+    assert parsed.path == "/app/social-accounts"
+    params = parse_qs(parsed.query)
+    assert params["status"] == ["connected"]
+    assert params["platform"] == ["instagram"]
+    assert params["product_id"] == ["prod-1"]
+
+
 def test_instagram_authorize_url_uses_instagram_login() -> None:
     client = MetaSocialOAuthClient(
         Settings(
             meta_app_id="meta-app-id",
             meta_app_secret="meta-app-secret",
+            instagram_app_id="",
+            instagram_app_secret="",
             meta_redirect_uri="http://localhost:8000/api/social/instagram/callback",
             meta_oauth_scope="instagram_basic,pages_show_list,instagram_content_publish",
         )
@@ -140,6 +158,35 @@ def test_instagram_authorize_url_uses_instagram_login() -> None:
     assert params["enable_fb_login"] == ["0"]
     assert params["scope"] == ["instagram_business_basic"]
     assert "extras" not in params
+
+
+def test_instagram_authorize_url_uses_instagram_app_id() -> None:
+    client = MetaSocialOAuthClient(
+        Settings(
+            meta_app_id="facebook-app-id",
+            meta_app_secret="facebook-app-secret",
+            instagram_app_id="instagram-app-id",
+            instagram_app_secret="instagram-app-secret",
+            meta_redirect_uri="http://localhost:8000/api/social/instagram/callback",
+        )
+    )
+    url = client.build_authorize_url(platform=SocialPlatform.instagram, state="signed-state")
+    params = parse_qs(urlparse(url).query)
+    assert params["client_id"] == ["instagram-app-id"]
+
+
+def test_instagram_authorize_url_uses_https_callback() -> None:
+    client = MetaSocialOAuthClient(
+        Settings(
+            meta_app_id="facebook-app-id",
+            meta_app_secret="facebook-app-secret",
+            instagram_app_id="instagram-app-id",
+            meta_redirect_uri="https://aisocialplanner.in/api/social/instagram/callback",
+        )
+    )
+    url = client.build_authorize_url(platform=SocialPlatform.instagram, state="signed-state")
+    params = parse_qs(urlparse(url).query)
+    assert params["redirect_uri"] == ["https://aisocialplanner.in/api/social/instagram/callback"]
 
 
 def test_meta_client_builds_facebook_profile() -> None:
@@ -287,35 +334,21 @@ def _assert_connected_response(
 ) -> None:
     assert hasattr(resp, "status_code")
     status_code = resp.status_code  # type: ignore[attr-defined]
-    if get_settings().frontend_url:
-        assert status_code == 302
-        location = resp.headers["location"]  # type: ignore[attr-defined]
-        assert "status=connected" in location
-        assert f"platform={platform}" in location
-        decoded = unquote(location.replace("+", " "))
-        assert handle.lstrip("@") in decoded or handle in decoded
-    else:
-        assert status_code == 200
-        if platform == "youtube":
-            label = "YouTube"
-        elif platform == "google":
-            label = "Google Business Profile"
-        elif platform == "facebook":
-            label = "Facebook"
-        else:
-            label = "Instagram"
-        assert f"{label} Connected" in resp.text  # type: ignore[attr-defined]
+    assert status_code == 302
+    location = resp.headers["location"]  # type: ignore[attr-defined]
+    assert "status=connected" in location
+    assert f"platform={platform}" in location
+    decoded = unquote(location.replace("+", " "))
+    assert handle.lstrip("@") in decoded or handle in decoded
+    assert "/app/social-accounts" in location
 
 
 def _assert_error_response(resp: object) -> None:
+    assert hasattr(resp, "status_code")
     status_code = resp.status_code  # type: ignore[attr-defined]
-    if get_settings().frontend_url:
-        assert status_code == 302
-        location = resp.headers["location"]  # type: ignore[attr-defined]
-        assert "status=error" in location
-    else:
-        assert status_code == 400
-        assert "failed" in resp.text.lower()  # type: ignore[attr-defined]
+    assert status_code == 302
+    location = resp.headers["location"]  # type: ignore[attr-defined]
+    assert "status=error" in location
 
 
 async def test_start_instagram_oauth_returns_authorize_url(

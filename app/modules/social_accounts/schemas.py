@@ -42,10 +42,14 @@ class StartSocialOAuthRequest(BaseModel):
     # Relative SPA path to send the browser to after OAuth returns
     # (e.g. /app/social-accounts or /onboarding/social-accounts).
     return_to: str | None = Field(default=None, max_length=500)
+    # SPA origin (http://localhost:5173 or https://aisocialplanner.in).
+    return_origin: str | None = Field(default=None, max_length=200)
 
 
 class StartSocialOAuthResponse(BaseModel):
     authorize_url: str
+    # Exact URI Instagram/Facebook must have under Valid OAuth Redirect URIs.
+    redirect_uri: str | None = None
 
 
 class FacebookTestPostResponse(BaseModel):

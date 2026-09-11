@@ -1,5 +1,6 @@
 from datetime import UTC, datetime, timedelta
 from typing import Any
+from urllib.parse import parse_qsl, urlencode, urlparse, urlunparse
 
 import jwt
 
@@ -10,6 +11,14 @@ from app.models.enums import SocialAccountScope, SocialPlatform
 OAUTH_STATE_TYPE = "social_oauth_state"
 OAUTH_STATE_TTL_MINUTES = 10
 DEFAULT_OAUTH_RETURN_TO = "/app/social-accounts"
+_LOCAL_SPA_ORIGINS = frozenset(
+    {
+        "http://localhost:5173",
+        "http://127.0.0.1:5173",
+        "https://aisocialplanner.in",
+        "https://www.aisocialplanner.in",
+    }
+)
 
 
 def safe_oauth_return_to(value: str | None) -> str:
@@ -22,6 +31,37 @@ def safe_oauth_return_to(value: str | None) -> str:
     return DEFAULT_OAUTH_RETURN_TO
 
 
+def safe_oauth_frontend_origin(value: str | None) -> str:
+    configured = (get_settings().frontend_url or "").strip().rstrip("/")
+    raw = (value or "").strip().rstrip("/")
+    if not raw:
+        return configured
+    parsed = urlparse(raw)
+    if parsed.scheme not in {"http", "https"} or not parsed.netloc:
+        return configured
+    if parsed.path not in {"", "/"} or parsed.query or parsed.fragment:
+        return configured
+    origin = f"{parsed.scheme}://{parsed.netloc}"
+    allowed = {item for item in {configured, *_LOCAL_SPA_ORIGINS} if item}
+    if origin in allowed:
+        return origin
+    return configured
+
+
+def oauth_callback_redirect_url(
+    *,
+    return_to: str | None,
+    frontend_origin: str | None,
+    params: dict[str, str],
+) -> str:
+    frontend = safe_oauth_frontend_origin(frontend_origin)
+    path = safe_oauth_return_to(return_to)
+    parsed = urlparse(f"{frontend}{path}" if frontend else path)
+    query = dict(parse_qsl(parsed.query))
+    query.update({key: value for key, value in params.items() if value})
+    return urlunparse(parsed._replace(query=urlencode(query)))
+
+
 def encode_oauth_state(
     *,
     user_id: str,
@@ -30,6 +70,7 @@ def encode_oauth_state(
     scope: SocialAccountScope = SocialAccountScope.product,
     sub_product_ids: list[str] | None = None,
     return_to: str | None = None,
+    frontend_origin: str | None = None,
 ) -> str:
     settings = get_settings()
     now = datetime.now(UTC)
@@ -41,6 +82,7 @@ def encode_oauth_state(
         "scope": scope.value,
         "sub_product_ids": sub_product_ids or [],
         "return_to": safe_oauth_return_to(return_to),
+        "frontend_origin": safe_oauth_frontend_origin(frontend_origin),
         "iat": now,
         "exp": now + timedelta(minutes=OAUTH_STATE_TTL_MINUTES),
     }
