@@ -155,6 +155,46 @@ async def test_render_assets_produces_clips_and_final_reel(
     assert len(download_resp.content) > 0
 
 
+async def test_render_assets_claims_job_before_worker_starts(
+    client: AsyncClient, email_service: RecordingEmailService, arq_pool: FakeArqPool
+) -> None:
+    """The render POST must not return the stale awaiting_render status.
+
+    Production arq runs asynchronously, unlike FakeArqPool's usual inline
+    execution, so hold the task here to exercise the window before a worker
+    picks it up.
+    """
+    admin = await register_and_login(client, email_service, "reel-admin-claim@example.com")
+    product_id = await _create_product(client, admin)
+    await _set_brand_profile(client, admin, product_id)
+
+    generate_resp = await client.post(
+        f"/api/v1/products/{product_id}/creatives/generate",
+        json=_generate_payload(),
+        headers=admin["headers"],
+    )
+    job_id = generate_resp.json()["id"]
+
+    async def enqueue_without_running(function: str, *args: object, **kwargs: object) -> None:
+        arq_pool.enqueued.append((function, args))
+        return None
+
+    arq_pool.enqueue_job = enqueue_without_running  # type: ignore[method-assign]
+
+    render_resp = await client.post(
+        f"/api/v1/products/{product_id}/creatives/jobs/{job_id}/render-assets",
+        headers=admin["headers"],
+    )
+    assert render_resp.status_code == 202, render_resp.text
+    assert render_resp.json()["status"] == "running"
+
+    duplicate_resp = await client.post(
+        f"/api/v1/products/{product_id}/creatives/jobs/{job_id}/render-assets",
+        headers=admin["headers"],
+    )
+    assert duplicate_resp.status_code == 400
+
+
 async def test_render_assets_on_post_job_400s(
     client: AsyncClient, email_service: RecordingEmailService, arq_pool: FakeArqPool
 ) -> None:

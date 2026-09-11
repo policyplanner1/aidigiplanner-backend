@@ -108,7 +108,6 @@ class GeminiVeoProvider(VideoProvider):
             aspect_ratio=aspect_ratio,
             resolution=resolution,
             duration_seconds=duration,
-            generate_audio=(voiceover is VoiceoverMode.native_audio),
         )
         if reference_images:
             config_kwargs["reference_images"] = [
@@ -119,12 +118,21 @@ class GeminiVeoProvider(VideoProvider):
                 for ref in reference_images
             ]
         config = genai_types.GenerateVideosConfig(**config_kwargs)
-        source = genai_types.GenerateVideosSource(prompt=scene.visual_prompt, image=image)
+        prompt = scene.visual_prompt
+        if voiceover is VoiceoverMode.native_audio and scene.vo_line.strip():
+            # Veo 3.1 audio is always on in the Gemini Developer API; its
+            # generate_audio config field is Enterprise-only. Put the desired
+            # narration in the prompt instead so Veo generates it natively.
+            prompt = (
+                f"{prompt}\nAudio: A clear voice-over narrator says exactly: "
+                f'"{scene.vo_line.strip()}"'
+            )
+        source = genai_types.GenerateVideosSource(prompt=prompt, image=image)
 
         logger.info(
             "veo_request",
             model=model_id,
-            prompt=scene.visual_prompt,
+            prompt=prompt,
             duration_s=duration,
             resolution=resolution,
             aspect_ratio=aspect_ratio,

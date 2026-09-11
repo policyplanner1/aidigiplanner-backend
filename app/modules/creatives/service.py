@@ -201,8 +201,13 @@ class CreativeService:
         and is sitting at awaiting_render (see the two-step reel flow in
         worker.py). Rejects a post/carousel job (which never reaches
         awaiting_render -- it renders in the same call as generate) and a
-        second call on an already-rendered reel job with the same 400,
-        since both simply never satisfy the status check below."""
+        second call on an already-claimed/rendered reel job with the same
+        400, since both simply never satisfy the status check below.
+
+        The status is changed to running before the task is enqueued. This
+        makes claiming the render visible in the POST response and prevents
+        clients from mistaking the old awaiting_render state for a completed
+        render while the worker is only just starting."""
         job = await self.get_job(product_id, job_id)
         if job.status != GenerationJobStatus.awaiting_render:
             raise BadRequestError(
@@ -274,9 +279,17 @@ class CreativeService:
             resource_type="generation_job",
             resource_id=job.id,
         )
+        job.status = GenerationJobStatus.running
         await self._session.commit()
 
-        arq_job = await self._arq.enqueue_job("render_creative_assets_job", job.id)
+        try:
+            arq_job = await self._arq.enqueue_job("render_creative_assets_job", job.id)
+        except Exception:
+            # The worker never received the task, so allow a safe retry from
+            # the UI instead of leaving the job permanently stuck at running.
+            job.status = GenerationJobStatus.awaiting_render
+            await self._session.commit()
+            raise
         if arq_job is not None:
             job.arq_job_id = arq_job.job_id
             await self._session.commit()
